@@ -370,6 +370,21 @@
   text-align: right;
 }
 
+.hero-cv-val.temp-mod {
+  color: #b05f00;
+  text-shadow: 0 0 3px rgba(255, 128, 0, 0.32);
+}
+
+.hero-cv-val.temp-buff {
+  color: #1d7f3b;
+  text-shadow: 0 0 3px rgba(46, 160, 67, 0.32);
+}
+
+.hero-cv-val.temp-debuff {
+  color: #b13a2f;
+  text-shadow: 0 0 3px rgba(199, 62, 46, 0.32);
+}
+
 .hero-stat-bar {
   display: flex;
   align-items: center;

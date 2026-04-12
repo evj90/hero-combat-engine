@@ -202,15 +202,6 @@ Hooks.once("init", () => {
     default: true
   });
 
-  game.settings.register("hero-combat-engine", "showPreBar", {
-    name: "Show PRE Status Bar",
-    hint: "Display a Presence (PRE) pip bar alongside STUN/BODY/END in the Segment Tracker.",
-    scope: "world",
-    config: false,
-    type: Boolean,
-    default: false
-  });
-
   game.settings.register("hero-combat-engine", "trackedPipCharacteristics", {
     name: "Tracked Pip Characteristics",
     hint: "Comma-separated characteristic keys to show as pip bars (for example: stun,body,end,pre).",

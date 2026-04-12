@@ -132,11 +132,10 @@ export async function clearHighlights() {
   if (oldRings.length) await canvas.scene.deleteEmbeddedDocuments("Drawing", oldRings.map(r => r.id));
 }
 
-// Called by the GM when the segment advances.
-// Clears any existing highlights, broadcasts a socket message so non-GM clients
-// play the burst locally, then places a persistent AmbientLight glow on the
-// token that is currently first in the acting order.
-export async function highlightActing() {
+// Called by the GM when the segment advances or when the Acting button is used.
+// Clears existing highlights, shows a segment-wide temporary burst, and
+// optionally places a persistent AmbientLight glow on the current actor.
+export async function highlightActing({ temporaryOnly = false } = {}) {
   if (!canvas?.scene) return;
   const segment = canvas.scene.getFlag("hero-combat-engine", "heroSegment") ?? 1;
   const phase   = canvas.scene.getFlag("hero-combat-engine", "heroPhase") ?? 1;
@@ -149,12 +148,15 @@ export async function highlightActing() {
   heroLog("Found", acting.length, "acting tokens");
   if (!acting.length) return;
 
-  // Tell non-GM clients to play the burst using their own local PIXI renderer.
-  game.socket?.emit("module.hero-combat-engine", { type: "highlight-burst" });
-  // GM plays the burst locally at the same time.
+  // Broadcast a synchronized burst to all clients, then play it locally on GM.
+  if (game.user.isGM) {
+    game.socket.emit("module.hero-combat-engine", { type: "highlight-burst" });
+  }
   await playBurst(acting);
 
-  // Burst is done — place a persistent glow only on the current active token.
+  if (temporaryOnly) return;
+
+  // Place a persistent glow only on the current active token.
   const currentIndex = canvas.scene.getFlag("hero-combat-engine", "heroCurrentActingIndex") ?? 0;
   const currentToken = acting[currentIndex] ?? acting[0];
   if (currentToken) await highlightToken(currentToken.id);

@@ -35,7 +35,7 @@
     <a class="encounter-control hero-tracker-btn" id="hero-remove-selected" title="Remove Selected Tokens from Combat">
       <i class="fas fa-minus"></i> Remove
     </a>
-    <a class="encounter-control hero-tracker-btn" id="hero-highlight" title="Pulse actors this segment">
+    <a class="encounter-control hero-tracker-btn" id="hero-highlight" title="Highlight the current acting token">
       <i class="fas fa-crosshairs"></i> Acting
     </a>
     <a class="encounter-control hero-tracker-btn" id="hero-refresh-order" title="Refresh Combat Order (re-sort by current DEX/SPD)">
@@ -82,9 +82,9 @@
             {{/each}}
           </div>
           <div class="hero-cv-stack" data-token-id="{{id}}" title="Combat Values (right-click to apply temporary modifiers)">
-            <div class="hero-cv-row"><span class="hero-cv-lbl">OCV</span><span class="hero-cv-val">{{ocv}}</span></div>
-            <div class="hero-cv-row"><span class="hero-cv-lbl">DCV</span><span class="hero-cv-val">{{dcv}}</span></div>
-            <div class="hero-cv-row"><span class="hero-cv-lbl">MCV</span><span class="hero-cv-val">{{mcv}}</span></div>
+            <div class="hero-cv-row"><span class="hero-cv-lbl">OCV</span><span class="hero-cv-val{{#if ocvTempClass}} {{ocvTempClass}}{{/if}}">{{ocv}}</span></div>
+            <div class="hero-cv-row"><span class="hero-cv-lbl">DCV</span><span class="hero-cv-val{{#if dcvTempClass}} {{dcvTempClass}}{{/if}}">{{dcv}}</span></div>
+            <div class="hero-cv-row"><span class="hero-cv-lbl">MCV</span><span class="hero-cv-val{{#if mcvTempClass}} {{mcvTempClass}}{{/if}}">{{mcv}}</span></div>
           </div>
           {{/if}}
         </div>

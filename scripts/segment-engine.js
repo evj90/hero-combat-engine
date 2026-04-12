@@ -21,16 +21,6 @@ function getMCVUpdateData(actor, delta) {
   return updates;
 }
 
-function getPost12RecoveryRule(stun) {
-  const t1 = game.settings.get("hero-combat-engine", "recoveryStunEveryPhase");
-  const t2 = game.settings.get("hero-combat-engine", "recoveryStunPost12Only");
-  const t3 = game.settings.get("hero-combat-engine", "recoveryStunOnceAMinute");
-  if (stun >= t1) return "Every Phase and post-Segment 12";
-  if (stun >= t2) return "Post-Segment 12 only";
-  if (stun >= t3) return "Once a minute only";
-  return "GM's option (a long time)";
-}
-
 function isIncapacitatedActor(actor) {
   if (!actor) return false;
   const stun = actor.system?.characteristics?.stun?.value ?? 0;
@@ -38,32 +28,42 @@ function isIncapacitatedActor(actor) {
   return body <= 0 || stun <= 0;
 }
 
-async function post12RecoveryDebug() {
+async function post12RecoveryAllCombatants() {
   if (!canvas?.scene) return;
   const actingOrder = canvas.scene.getFlag("hero-combat-engine", "hero-combat.actingOrder") ?? [];
   const messages = [];
-  for (let t of canvas.tokens.placeables) {
-    if (!actingOrder.includes(t.id)) continue;
+
+  for (const tokenId of actingOrder) {
+    const t = canvas.tokens.get(tokenId);
+    if (!t?.actor) continue;
+
     const actor = t.actor;
-    if (!actor) continue;
+    const chars = actor.system?.characteristics ?? {};
+    const rec = Number(chars.rec?.value ?? 0);
+    const stun = Number(chars.stun?.value ?? 0);
+    const end = Number(chars.end?.value ?? 0);
+    const stunMaxRaw = Number(chars.stun?.max ?? stun);
+    const endMaxRaw = Number(chars.end?.max ?? end);
+    const stunMax = Number.isFinite(stunMaxRaw) ? stunMaxRaw : stun;
+    const endMax = Number.isFinite(endMaxRaw) ? endMaxRaw : end;
 
-    const stun = actor.system?.characteristics?.stun?.value ?? 0;
-    const body = actor.system?.characteristics?.body?.value ?? 0;
-    const rule = getPost12RecoveryRule(stun);
-    const bodyThreshold = game.settings.get("hero-combat-engine", "recoveryBodyThreshold");
-    const stunGmThreshold = game.settings.get("hero-combat-engine", "recoveryStunOnceAMinute") - 1;
-
-    if (body <= bodyThreshold) {
-      messages.push(`${t.name} skipped recovery because BODY ${body} indicates dead or dying.`);
-      continue;
-    }
-    if (stun <= stunGmThreshold) {
-      messages.push(`${t.name} skipped recovery because STUN ${stun} is in GM's option / long time.`);
+    if (!Number.isFinite(rec) || rec <= 0) {
+      messages.push(`<strong>${t.name}</strong>: no REC available.`);
       continue;
     }
 
-    // These tokens are eligible for post-12 recovery; no skip message is needed.
-    heroLog(`${t.name} is eligible for post-Segment 12 recovery (${rule}).`);
+    const newStun = Math.min(stun + rec, stunMax);
+    const newEnd = Math.min(end + rec, endMax);
+
+    if (newStun !== stun || newEnd !== end) {
+      await actor.update({
+        "system.characteristics.stun.value": newStun,
+        "system.characteristics.end.value": newEnd
+      });
+      messages.push(`<strong>${t.name}</strong>: STUN ${stun} -> ${newStun}, END ${end} -> ${newEnd}.`);
+    } else {
+      messages.push(`<strong>${t.name}</strong>: already at max recovery values.`);
+    }
   }
 
   if (messages.length > 0 && game.settings.get("hero-combat-engine", "chatPost12Recovery")) {
@@ -71,7 +71,7 @@ async function post12RecoveryDebug() {
     const phase = canvas.scene.getFlag("hero-combat-engine", "heroPhase") ?? 1;
     ChatMessage.create({
       speaker: { alias: "Combat Engine" },
-      content: `<strong>Segment ${phase}.${segment}</strong><br><strong>Post-Segment 12 Recovery Skipped:</strong><br>${messages.join("<br>")}`
+      content: `<strong>Segment ${phase}.${segment}</strong><br><strong>Post-Segment 12 Recovery (All Combatants):</strong><br>${messages.join("<br>")}`
     });
   }
 }
@@ -544,7 +544,7 @@ export async function segmentAdvance({ skipWarning = false } = {}) {
   await adjustmentFade("segment");
   if (wrapped) {
     await adjustmentFade("phase");
-    await post12RecoveryDebug();
+    await post12RecoveryAllCombatants();
   }
 
   // Get all SPD values from SPD_MAP that act in this segment
@@ -591,7 +591,7 @@ export async function segmentAdvance({ skipWarning = false } = {}) {
       await adjustmentFade("segment");
       if (innerWrapped) {
         await adjustmentFade("phase");
-        await post12RecoveryDebug();
+        await post12RecoveryAllCombatants();
       }
       const nextActors = getActingTokens(segment);
       if (nextActors.length > 0) break;

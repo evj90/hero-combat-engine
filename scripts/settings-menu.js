@@ -36,7 +36,6 @@ export class HeroCombatSettingsMenu extends FormApplication {
       autoOpenTrackerPlayers: s("autoOpenTrackerPlayers"),
       autoCloseTrackerOnEnd:  s("autoCloseTrackerOnEnd"),
       showSpdColumn:          s("showSpdColumn"),
-      showPreBar:             s("showPreBar"),
       trackedPipCharacteristics: s("trackedPipCharacteristics"),
       accessibilitySize,
       accessibilitySizeIsCompact: accessibilitySize === "compact",

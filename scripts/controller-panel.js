@@ -45,6 +45,76 @@ function getPreferredEntangleStatusId(actor) {
   return "restrain";
 }
 
+function getNestedValue(obj, path) {
+  return path.split(".").reduce((acc, key) => acc?.[key], obj);
+}
+
+function asNumber(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function getEntangleAttackOptions(actor) {
+  const options = [];
+  const strValue = asNumber(actor?.system?.characteristics?.str?.value, 0);
+  options.push({
+    id: "builtin-str",
+    label: `STR (${strValue})`,
+    ocvMod: 0,
+    damageFormula: "",
+    source: "builtin"
+  });
+
+  for (const item of actor?.items ?? []) {
+    const itemType = String(item.type ?? "").toLowerCase();
+    const typeLooksAttacky = /(attack|weapon|maneuver|power|spell)/i.test(itemType);
+    const hasAttackKeyword = /(attack|strike|blast|entangle|punch|kick|hka|rka)/i.test(item.name ?? "");
+    const hasAttackBlock = getNestedValue(item, "system.attack") != null;
+
+    const ocvMod = asNumber(
+      getNestedValue(item, "system.ocvMod")
+        ?? getNestedValue(item, "system.attack.ocvMod")
+        ?? getNestedValue(item, "system.attack.ocv")
+        ?? getNestedValue(item, "system.toHitMod")
+        ?? getNestedValue(item, "system.cv.ocv")
+        ?? 0,
+      0
+    );
+
+    const damageFormulaRaw =
+      getNestedValue(item, "system.damage")
+      ?? getNestedValue(item, "system.damageFormula")
+      ?? getNestedValue(item, "system.attack.damage")
+      ?? getNestedValue(item, "system.effect.damage")
+      ?? getNestedValue(item, "system.formula")
+      ?? "";
+
+    const damageFormula = String(damageFormulaRaw ?? "").trim();
+    const looksLikeFormula = /^\s*[0-9dD+\-*/()\s]+$/.test(damageFormula) && /\d+d\d+/i.test(damageFormula);
+    const hasAttackIndicators = typeLooksAttacky || hasAttackKeyword || hasAttackBlock;
+    const hasUsableRollData = Boolean(ocvMod) || looksLikeFormula || Boolean(getNestedValue(item, "system.attack.damage"));
+    if (!hasAttackIndicators || !hasUsableRollData) continue;
+
+    options.push({
+      id: `item-${item.id}`,
+      label: item.name ?? "Unnamed Attack",
+      ocvMod,
+      damageFormula: looksLikeFormula ? damageFormula : "",
+      source: "item"
+    });
+  }
+
+  options.push({
+    id: "custom-manual",
+    label: "Custom Attack (manual damage)",
+    ocvMod: 0,
+    damageFormula: "",
+    source: "custom"
+  });
+
+  return options;
+}
+
 function getMCVUpdateData(actor, delta) {
   if (!delta) return {};
 
@@ -102,10 +172,10 @@ function getBucketDescription(charKey, bucketLabel) {
   return charTable?.[bucketLabel] ?? bucketLabel;
 }
 
-function getTrackedPipCharacteristics(showPreBarLegacy = false) {
+function getTrackedPipCharacteristics() {
   const raw = game.settings.get("hero-combat-engine", "trackedPipCharacteristics") ?? "";
   if (!raw.trim()) {
-    return showPreBarLegacy ? ["stun", "body", "end", "pre"] : ["stun", "body", "end"];
+    return ["stun", "body", "end"];
   }
 
   const parsed = raw
@@ -162,8 +232,7 @@ export class HeroControllerPanel extends Application {
     const currentActingIndex = canvas.scene.getFlag("hero-combat-engine", "heroCurrentActingIndex") ?? 0;
     const actingOrder = canvas.scene.getFlag("hero-combat-engine", "hero-combat.actingOrder") ?? [];
     const showSpdColumn = game.settings.get("hero-combat-engine", "showSpdColumn");
-    const showPreBar = game.settings.get("hero-combat-engine", "showPreBar");
-    const trackedPipCharacteristics = getTrackedPipCharacteristics(showPreBar);
+    const trackedPipCharacteristics = getTrackedPipCharacteristics();
     const playerSelfAdvance = game.settings.get("hero-combat-engine", "playerSelfAdvance");
     const hideNonActing = game.settings.get("hero-combat-engine", "hideNonActing");
 
@@ -269,6 +338,12 @@ export class HeroControllerPanel extends Application {
 
       const coverDCV = token.document.getFlag("hero-combat-engine", "coverDCV") ?? 0;
       const coverStage = getCoverStage(coverDCV);
+      const cvMods = (token.document.getFlag("hero-combat-engine", "cvSegmentMods") ?? []).reduce((acc, mod) => {
+        acc.ocv += mod.ocvMod ?? 0;
+        acc.dcv += mod.dcvMod ?? 0;
+        acc.mcv += mod.mcvMod ?? 0;
+        return acc;
+      }, { ocv: 0, dcv: 0, mcv: 0 });
 
       return {
         id: token.id,
@@ -276,6 +351,12 @@ export class HeroControllerPanel extends Application {
         img: token.document.texture?.src || actor.img || "icons/svg/mystery-man.svg",
         spd,
         ocv, dcv, mcv,
+        ocvTempActive: cvMods.ocv !== 0,
+        dcvTempActive: cvMods.dcv !== 0,
+        mcvTempActive: cvMods.mcv !== 0,
+        ocvTempClass: cvMods.ocv > 0 ? "temp-buff" : (cvMods.ocv < 0 ? "temp-debuff" : ""),
+        dcvTempClass: cvMods.dcv > 0 ? "temp-buff" : (cvMods.dcv < 0 ? "temp-debuff" : ""),
+        mcvTempClass: cvMods.mcv > 0 ? "temp-buff" : (cvMods.mcv < 0 ? "temp-debuff" : ""),
         statBars,
         canSeeStats,
         effects,
@@ -292,7 +373,6 @@ export class HeroControllerPanel extends Application {
         isActing, isHeld, isAborted,
         allowEndTurn, allowRemove, allowHold, allowRelease, allowAbort,
         canActThisSegment,
-        showPreBar,
         stateClass,
         statusText,
         quickStatuses: (() => {
@@ -328,7 +408,6 @@ export class HeroControllerPanel extends Application {
       isGM: isPrivileged(),
       accessibilityClass,
       showSpdColumn,
-      showPreBar,
       hideNonActing,
       actingSPDs,
       combatants,
@@ -441,7 +520,7 @@ export class HeroControllerPanel extends Application {
     html.find("#hero-highlight").click(async (e) => {
       e.preventDefault();
       try {
-        if (game.heroCombat?.highlightActing) await game.heroCombat.highlightActing();
+        if (game.heroCombat?.highlightActing) await game.heroCombat.highlightActing({ temporaryOnly: true });
       } catch (err) {
         console.error("[HERO ERROR] highlightActing failed:", err);
       }
@@ -571,10 +650,14 @@ export class HeroControllerPanel extends Application {
       await this._openEntangleDialog(tokenId, getPreferredEntangleStatusId(token?.actor));
     });
 
-    html.find(".hero-cv-stack").on("contextmenu", async (e) => {
-      e.preventDefault();
-      const tokenId = e.currentTarget.dataset.tokenId;
-      await this._openCvAdjustmentDialog(tokenId);
+    // Use native addEventListener so the contextmenu event reaches us regardless
+    // of any jQuery-layer interception that was swallowing it previously.
+    html.find(".hero-cv-stack").each((_, el) => {
+      el.addEventListener("contextmenu", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        await this._openCvAdjustmentDialog(el.dataset.tokenId);
+      });
     });
 
     html.find(".hero-cover-btn").click(async (e) => {
@@ -1105,6 +1188,11 @@ export class HeroControllerPanel extends Application {
           </div>
         `,
         buttons: {
+          attack: {
+            icon: '<i class="fas fa-sword"></i>',
+            label: "Attack Entangle",
+            callback: () => resolve({ action: "attack" })
+          },
           update: {
             icon: '<i class="fas fa-save"></i>',
             label: "Update",
@@ -1122,6 +1210,12 @@ export class HeroControllerPanel extends Application {
     });
 
     if (!result) return;
+
+    if (result.action === "attack") {
+      await this._openEntangleAttackDialog(tokenId, statusId);
+      await this.render(true);
+      return;
+    }
 
     if (result.action === "update") {
       if (result.body <= 0) {
@@ -1162,6 +1256,211 @@ export class HeroControllerPanel extends Application {
     }
 
     await this.render(true);
+  }
+
+  async _openEntangleAttackDialog(tokenId, statusId = "restrain") {
+    const token = canvas.tokens.get(tokenId);
+    const actor = token?.actor;
+    if (!token || !actor) return;
+    if (!isPrivileged() && !actor.isOwner) return;
+
+    const currentBody = asNumber(token.document.getFlag("hero-combat-engine", "entangleBody"), 0);
+    if (currentBody <= 0) {
+      ui.notifications.warn(`${token.name} does not currently have Entangle BODY to attack.`);
+      return;
+    }
+
+    const phase = canvas.scene.getFlag("hero-combat-engine", "heroPhase") ?? 1;
+    const segment = canvas.scene.getFlag("hero-combat-engine", "heroSegment") ?? 1;
+    const clearStatusIds = (() => {
+      const ids = new Set(getActiveEntangleStatusIds(actor));
+      if (!ids.size && isEntangleStatus(statusId)) ids.add(statusId);
+      return [...ids];
+    })();
+
+    const options = getEntangleAttackOptions(actor);
+    const optionMarkup = options.map((opt, idx) => {
+      const modLabel = opt.ocvMod ? ` (OCV ${opt.ocvMod > 0 ? "+" : ""}${opt.ocvMod})` : "";
+      const dmgLabel = opt.damageFormula ? ` [${opt.damageFormula}]` : "";
+      return `<option value="${opt.id}"${idx === 0 ? " selected" : ""}>${opt.label}${modLabel}${dmgLabel}</option>`;
+    }).join("");
+
+    const attackSelection = await new Promise(resolve => {
+      new Dialog({
+        title: `Attack Entangle — ${token.name}`,
+        content: `
+          <div style="display:grid;gap:8px;margin-top:4px;">
+            <p style="margin:0;font-size:0.85em;color:var(--color-text-dark-secondary);">
+              Choose an attack option, roll to hit Entangle, then apply BODY damage on a hit.
+            </p>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <label style="min-width:130px;flex-shrink:0;">Attack option:</label>
+              <select id="ent-attack-opt" style="flex:1;">${optionMarkup}</select>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <label style="min-width:130px;flex-shrink:0;">Target DCV:</label>
+              <input type="number" id="ent-target-dcv" value="3" min="0" style="width:70px;"/>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <label style="min-width:130px;flex-shrink:0;">Manual OCV mod:</label>
+              <input type="number" id="ent-ocv-mod" value="0" style="width:70px;"/>
+            </div>
+          </div>
+        `,
+        buttons: {
+          roll: {
+            icon: '<i class="fas fa-dice"></i>',
+            label: "Roll To Hit",
+            callback: html => resolve({
+              action: "roll",
+              optionId: html.find("#ent-attack-opt").val(),
+              targetDcv: parseInt(html.find("#ent-target-dcv").val()) || 0,
+              manualOcvMod: parseInt(html.find("#ent-ocv-mod").val()) || 0
+            })
+          },
+          cancel: { label: "Cancel", callback: () => resolve(null) }
+        },
+        default: "roll"
+      }).render(true);
+    });
+
+    if (!attackSelection || attackSelection.action !== "roll") return;
+
+    const chosen = options.find(o => o.id === attackSelection.optionId) ?? options[0];
+    const baseOcv = asNumber(actor.system?.characteristics?.ocv?.value, 0);
+    const totalOcv = baseOcv + asNumber(chosen.ocvMod, 0) + asNumber(attackSelection.manualOcvMod, 0);
+    const targetNumber = 11 + totalOcv - asNumber(attackSelection.targetDcv, 0);
+    const toHitRoll = await (new Roll("3d6")).evaluate({ async: true });
+    const hit = toHitRoll.total <= targetNumber;
+
+    ChatMessage.create({
+      speaker: { alias: "Combat Engine" },
+      roll: toHitRoll,
+      content: `<strong>Segment ${phase}.${segment}</strong><br><strong>${token.name}</strong> attacks Entangle with <strong>${chosen.label}</strong>: rolled <strong>${toHitRoll.total}</strong> vs target <strong>${targetNumber}</strong> (${hit ? "HIT" : "MISS"}).`
+    });
+
+    if (!hit) return;
+
+    let suggestedDamage = "";
+    let suggestedDefense = "0";
+    let lastDamageRoll = null;
+
+    while (true) {
+      const damageResult = await new Promise(resolve => {
+        new Dialog({
+          title: `Apply Entangle Damage — ${token.name}`,
+          content: `
+            <div style="display:grid;gap:8px;margin-top:4px;">
+              <p style="margin:0;font-size:0.85em;color:var(--color-text-dark-secondary);">
+                Enter BODY dealt to Entangle. Remaining BODY: <strong>${currentBody}</strong>.
+              </p>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <label style="min-width:130px;flex-shrink:0;">BODY damage:</label>
+                <input type="number" id="ent-dmg" value="${suggestedDamage || "0"}" min="0" style="width:80px;" autofocus/>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <label style="min-width:130px;flex-shrink:0;">Defense applied:</label>
+                <input type="number" id="ent-defense" value="${suggestedDefense}" min="0" style="width:80px;"/>
+              </div>
+              <p style="margin:0;font-size:0.8em;color:var(--color-text-dark-secondary);">Attack formula: ${chosen.damageFormula ? `<code>${chosen.damageFormula}</code>` : "none on selected attack"}${lastDamageRoll ? ` (last roll total ${lastDamageRoll.total})` : ""}</p>
+            </div>
+          `,
+          buttons: {
+            apply: {
+              icon: '<i class="fas fa-check"></i>',
+              label: "Apply Damage",
+              callback: html => resolve({
+                action: "apply",
+                bodyDamage: parseInt(html.find("#ent-dmg").val()) || 0,
+                defenseApplied: parseInt(html.find("#ent-defense").val()) || 0
+              })
+            },
+            rollDamage: {
+              icon: '<i class="fas fa-dice"></i>',
+              label: "Roll Damage",
+              callback: html => resolve({
+                action: "rollDamage",
+                defenseApplied: parseInt(html.find("#ent-defense").val()) || 0
+              })
+            },
+            cancel: { label: "Cancel", callback: () => resolve(null) }
+          },
+          default: "apply"
+        }).render(true);
+      });
+
+      if (!damageResult) return;
+
+      suggestedDefense = String(Math.max(0, asNumber(damageResult.defenseApplied, 0)));
+
+      if (damageResult.action === "rollDamage") {
+        try {
+          let formula = chosen.damageFormula;
+          if (!formula) {
+            const customFormula = await new Promise(resolve => {
+              new Dialog({
+                title: `Roll Damage Formula — ${token.name}`,
+                content: `
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <label style="min-width:120px;flex-shrink:0;">Damage formula:</label>
+                    <input type="text" id="ent-dmg-formula" value="${suggestedDamage && /^\d+$/.test(suggestedDamage) ? `${suggestedDamage}` : "3d6"}" style="width:120px;" autofocus/>
+                  </div>
+                `,
+                buttons: {
+                  roll: { label: "Roll", callback: html => resolve(String(html.find("#ent-dmg-formula").val() ?? "").trim()) },
+                  cancel: { label: "Cancel", callback: () => resolve(null) }
+                },
+                default: "roll"
+              }).render(true);
+            });
+            if (!customFormula) continue;
+            formula = customFormula;
+          }
+
+          lastDamageRoll = await (new Roll(formula)).evaluate({ async: true });
+          suggestedDamage = String(lastDamageRoll.total ?? 0);
+          ChatMessage.create({
+            speaker: { alias: "Combat Engine" },
+            roll: lastDamageRoll,
+            content: `<strong>${token.name}</strong> damage roll for Entangle attack (${chosen.label}). Apply defense, then confirm net BODY in the dialog.`
+          });
+        } catch (err) {
+          ui.notifications.error(`Invalid damage formula. Enter BODY manually or try another formula.`);
+          console.error("[HERO ERROR] Entangle damage roll failed:", err);
+        }
+        continue;
+      }
+
+      if (damageResult.action !== "apply") return;
+
+      const bodyDamage = Math.max(0, asNumber(damageResult.bodyDamage, 0));
+      const defenseApplied = Math.max(0, asNumber(damageResult.defenseApplied, 0));
+      const netBodyDamage = Math.max(0, bodyDamage - defenseApplied);
+      const remaining = Math.max(0, currentBody - netBodyDamage);
+
+      if (remaining <= 0) {
+        await token.document.unsetFlag("hero-combat-engine", "entangleBody");
+        for (const clearId of clearStatusIds) {
+          const effectData = CONFIG.statusEffects?.find(e => e.id === clearId);
+          if (!effectData) continue;
+          const isEntangled = actor.statuses?.has(clearId) ?? actor.effects.some(e => [...(e.statuses ?? [])].includes(clearId));
+          if (!isEntangled) continue;
+          if (typeof actor.toggleStatusEffect === "function") await actor.toggleStatusEffect(clearId);
+          else await token.toggleEffect(effectData);
+        }
+        ChatMessage.create({
+          speaker: { alias: "Combat Engine" },
+          content: `<strong>Segment ${phase}.${segment}</strong><br><strong>${token.name}</strong> takes ${netBodyDamage} BODY to Entangle after ${defenseApplied} defense (${bodyDamage} rolled) and breaks free.`
+        });
+      } else {
+        await token.document.setFlag("hero-combat-engine", "entangleBody", remaining);
+        ChatMessage.create({
+          speaker: { alias: "Combat Engine" },
+          content: `<strong>Segment ${phase}.${segment}</strong><br><strong>${token.name}</strong> takes ${netBodyDamage} BODY to Entangle after ${defenseApplied} defense (${bodyDamage} rolled). ${remaining} BODY remaining.`
+        });
+      }
+      break;
+    }
   }
 
   async _openCvAdjustmentDialog(tokenId) {
@@ -1213,7 +1512,7 @@ export class HeroControllerPanel extends Application {
             </div>
           </div>
         `,
-        buttons: {
+        buttons: Object.fromEntries(Object.entries({
           apply: {
             icon: '<i class="fas fa-check"></i>',
             label: "Apply",
@@ -1231,7 +1530,7 @@ export class HeroControllerPanel extends Application {
             callback: () => resolve({ action: "clear" })
           } : undefined,
           cancel: { label: "Cancel", callback: () => resolve(null) }
-        },
+        }).filter(([_, v]) => v !== undefined)),
         default: "apply"
       }).render(true);
     });
