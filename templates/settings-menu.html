@@ -1,0 +1,318 @@
+<form class="hero-settings-form" autocomplete="off">
+  <div class="hero-settings-scroll">
+
+    <fieldset class="hero-settings-group">
+      <legend><i class="fas fa-bug"></i> Debug</legend>
+      <div class="form-group">
+        <label>Debug Mode</label>
+        <div class="form-fields">
+          <input type="checkbox" name="debugMode" {{#if debugMode}}checked{{/if}}/>
+        </div>
+        <p class="hint">Post verbose debug messages to the chat window. Disable for cleaner gameplay.</p>
+      </div>
+    </fieldset>
+
+    <fieldset class="hero-settings-group">
+      <legend><i class="fas fa-wand-magic-sparkles"></i> Highlight Appearance</legend>
+      <div class="form-group">
+        <label>Active Glow Color</label>
+        <div class="form-fields">
+          <input type="color" name="ringColorActive" value="{{ringColorActive}}"/>
+        </div>
+        <p class="hint">Pulsing glow color on the token whose turn it currently is.</p>
+      </div>
+      <div class="form-group">
+        <label>Incapacitated Glow Color</label>
+        <div class="form-fields">
+          <input type="color" name="ringColorIncapacitated" value="{{ringColorIncapacitated}}"/>
+        </div>
+        <p class="hint">Glow color used instead when the acting token has STUN ≤ 0 or BODY ≤ 0.</p>
+      </div>
+      <div class="form-group">
+        <label>Glow Bright Radius</label>
+        <div class="form-fields">
+          <input type="number" name="glowBright" value="{{glowBright}}" min="0" max="100" step="1"/>
+        </div>
+        <p class="hint">Bright-light radius of the acting-token glow, in scene distance units. Set to 0 for a soft glow with no bright center.</p>
+      </div>
+      <div class="form-group">
+        <label>Glow Dim Radius</label>
+        <div class="form-fields">
+          <input type="number" name="glowDim" value="{{glowDim}}" min="0" max="200" step="1"/>
+        </div>
+        <p class="hint">Dim light radius of the acting-token glow, in scene distance units.</p>
+      </div>
+      <div class="form-group">
+        <label>Glow Intensity (0–1)</label>
+        <div class="form-fields">
+          <input type="number" name="glowAlpha" value="{{glowAlpha}}" min="0" max="1" step="0.05"/>
+        </div>
+        <p class="hint">Color saturation of the pulsing glow. 0 = invisible, 1 = fully saturated.</p>
+      </div>
+      <div class="form-group">
+        <label>Burst Color</label>
+        <div class="form-fields">
+          <input type="color" name="ringColorBurst" value="{{ringColorBurst}}"/>
+        </div>
+        <p class="hint">Color of the starburst PIXI animation shown on all acting tokens when a new segment begins.</p>
+      </div>
+      <div class="form-group">
+        <label>Burst Stroke Width (px)</label>
+        <div class="form-fields">
+          <input type="number" name="ringStrokeWidth" value="{{ringStrokeWidth}}" min="1" max="20" step="1"/>
+        </div>
+        <p class="hint">Line thickness of the starburst ring drawn around each acting token.</p>
+      </div>
+      <div class="form-group">
+        <label>Burst Ring Inset (px)</label>
+        <div class="form-fields">
+          <input type="number" name="ringInset" value="{{ringInset}}" min="0" max="100" step="1"/>
+        </div>
+        <p class="hint">Extra padding around the token image when drawing the burst starburst ring.</p>
+      </div>
+      <div class="form-group">
+        <label>Burst Duration (ms)</label>
+        <div class="form-fields">
+          <input type="number" name="burstDuration" value="{{burstDuration}}" min="500" max="10000" step="100"/>
+        </div>
+        <p class="hint">How long the starburst animation plays at segment start.</p>
+      </div>
+    </fieldset>
+
+    <fieldset class="hero-settings-group">
+      <legend><i class="fas fa-comments"></i> Chat Messages</legend>
+      <div class="form-group">
+        <label>Show Token Turn Messages</label>
+        <div class="form-fields">
+          <input type="checkbox" name="chatTokenTurns" {{#if chatTokenTurns}}checked{{/if}}/>
+        </div>
+        <p class="hint">Post a chat message each time a token's turn begins or passes.</p>
+      </div>
+      <div class="form-group">
+        <label>Show Segment Advance Summary</label>
+        <div class="form-fields">
+          <input type="checkbox" name="chatSegmentSummary" {{#if chatSegmentSummary}}checked{{/if}}/>
+        </div>
+        <p class="hint">Post a chat message listing which SPDs and tokens act when a new segment begins.</p>
+      </div>
+      <div class="form-group">
+        <label>Show Post-Segment 12 Recovery Messages</label>
+        <div class="form-fields">
+          <input type="checkbox" name="chatPost12Recovery" {{#if chatPost12Recovery}}checked{{/if}}/>
+        </div>
+        <p class="hint">Post a chat message covering Flash recovery and tokens that skip post-Seg 12 recovery at each Turn boundary.</p>
+      </div>
+      <div class="form-group">
+        <label>Show Empty Segment Skip Message</label>
+        <div class="form-fields">
+          <input type="checkbox" name="chatSkipEmptySegment" {{#if chatSkipEmptySegment}}checked{{/if}}/>
+        </div>
+        <p class="hint">Post a message listing which segments were skipped. Only applies when Auto-Skip Empty Segments is on.</p>
+      </div>
+    </fieldset>
+
+    <fieldset class="hero-settings-group">
+      <legend><i class="fas fa-heart-pulse"></i> Post-Segment 12 Recovery</legend>
+      <p class="hint" style="margin:2px 0 6px;">These thresholds determine when a token is eligible for their post-Seg 12 Recovery. STUN can be negative when a character is damaged beyond zero.</p>
+      <div class="form-group">
+        <label>BODY Dead/Dying Threshold</label>
+        <div class="form-fields">
+          <input type="number" name="recoveryBodyThreshold" value="{{recoveryBodyThreshold}}" step="1"/>
+        </div>
+        <p class="hint">Tokens with BODY at or below this value are considered dead or dying and skip recovery entirely.</p>
+      </div>
+      <div class="form-group">
+        <label>STUN "Every Phase" Threshold</label>
+        <div class="form-fields">
+          <input type="number" name="recoveryStunEveryPhase" value="{{recoveryStunEveryPhase}}" step="1"/>
+        </div>
+        <p class="hint">Tokens with STUN at or above this value may recover every Phase and post-Seg 12.</p>
+      </div>
+      <div class="form-group">
+        <label>STUN "Post-Seg 12 Only" Threshold</label>
+        <div class="form-fields">
+          <input type="number" name="recoveryStunPost12Only" value="{{recoveryStunPost12Only}}" step="1"/>
+        </div>
+        <p class="hint">Tokens with STUN at or above this (but below Every-Phase) may only recover post-Seg 12.</p>
+      </div>
+      <div class="form-group">
+        <label>STUN "Once a Minute" Threshold</label>
+        <div class="form-fields">
+          <input type="number" name="recoveryStunOnceAMinute" value="{{recoveryStunOnceAMinute}}" step="1"/>
+        </div>
+        <p class="hint">Tokens at or above this (but below Post-Seg 12 Only) may only recover once a minute. Below this is GM's option.</p>
+      </div>
+    </fieldset>
+
+    <fieldset class="hero-settings-group">
+      <legend><i class="fas fa-table-list"></i> Tracker Display</legend>
+      <div class="form-group">
+        <label>Auto-Open Tracker for Players</label>
+        <div class="form-fields">
+          <input type="checkbox" name="autoOpenTrackerPlayers" {{#if autoOpenTrackerPlayers}}checked{{/if}}/>
+        </div>
+        <p class="hint">Automatically open the Segment Tracker panel for all players when combat begins.</p>
+      </div>
+      <div class="form-group">
+        <label>Auto-Close Tracker on Combat End</label>
+        <div class="form-fields">
+          <input type="checkbox" name="autoCloseTrackerOnEnd" {{#if autoCloseTrackerOnEnd}}checked{{/if}}/>
+        </div>
+        <p class="hint">Automatically close the Segment Tracker for all connected clients when combat ends.</p>
+      </div>
+      <div class="form-group">
+        <label>Show SPD Column</label>
+        <div class="form-fields">
+          <input type="checkbox" name="showSpdColumn" {{#if showSpdColumn}}checked{{/if}}/>
+        </div>
+        <p class="hint">Display each token's SPD value as a column in the tracker.</p>
+      </div>
+      <div class="form-group">
+        <label>Show PRE Status Bar</label>
+        <div class="form-fields">
+          <input type="checkbox" name="showPreBar" {{#if showPreBar}}checked{{/if}}/>
+        </div>
+        <p class="hint">Show a Presence (PRE) pip bar alongside STUN / BODY / END in the tracker.</p>
+      </div>
+      <div class="form-group">
+        <label>Tracked Pip Characteristics</label>
+        <div class="form-fields">
+          <input type="text" name="trackedPipCharacteristics" value="{{trackedPipCharacteristics}}"/>
+        </div>
+        <p class="hint">Comma-separated characteristic keys to show as pip bars, for example: stun, body, end, pre, dex, ego.</p>
+      </div>
+      <div class="form-group">
+        <label>Accessibility Size</label>
+        <div class="form-fields">
+          <select name="accessibilitySize">
+            <option value="compact" {{#if accessibilitySizeIsCompact}}selected{{/if}}>Compact</option>
+            <option value="medium" {{#if accessibilitySizeIsMedium}}selected{{/if}}>Medium</option>
+            <option value="large" {{#if accessibilitySizeIsLarge}}selected{{/if}}>Large</option>
+          </select>
+        </div>
+        <p class="hint">Choose tracker density: Compact keeps the small default, Medium and Large increase readability and click targets.</p>
+      </div>
+      <div class="form-group">
+        <label>Hide Non-Acting Tokens (default)</label>
+        <div class="form-fields">
+          <input type="checkbox" name="hideNonActing" {{#if hideNonActing}}checked{{/if}}/>
+        </div>
+        <p class="hint">Default state of the eye toggle in the tracker. Each player can override this per-session.</p>
+      </div>
+    </fieldset>
+
+    <fieldset class="hero-settings-group">
+      <legend><i class="fas fa-gavel"></i> Turn Management</legend>
+      <div class="form-group">
+        <label>Players Can Advance Any Token's Turn</label>
+        <div class="form-fields">
+          <input type="checkbox" name="playerSelfAdvance" {{#if playerSelfAdvance}}checked{{/if}}/>
+        </div>
+        <p class="hint">When enabled, any player can click Done on the acting token, not just the token's owner.</p>
+      </div>
+      <div class="form-group">
+        <label>Warn Before Skipping Acting Tokens</label>
+        <div class="form-fields">
+          <input type="checkbox" name="warnSkipActing" {{#if warnSkipActing}}checked{{/if}}/>
+        </div>
+        <p class="hint">Show a confirmation dialog when the GM advances the segment while tokens still have their turn remaining.</p>
+      </div>
+      <div class="form-group">
+        <label>Auto-Skip Empty Segments</label>
+        <div class="form-fields">
+          <input type="checkbox" name="autoSkipEmptySegments" {{#if autoSkipEmptySegments}}checked{{/if}}/>
+        </div>
+        <p class="hint">Automatically advance past segments where no combatants act, jumping straight to the next active segment.</p>
+      </div>
+      <div class="form-group">
+        <label>Auto-Skip Dead/Unconscious</label>
+        <div class="form-fields">
+          <input type="checkbox" name="autoSkipIncapacitated" {{#if autoSkipIncapacitated}}checked{{/if}}/>
+        </div>
+        <p class="hint">When enabled, tokens with BODY ≤ 0 or STUN ≤ 0 are skipped when determining turn order in a segment.</p>
+      </div>
+      <div class="form-group">
+        <label>DEX Tie-Break Characteristic</label>
+        <div class="form-fields">
+          <select name="tieBreakStat">
+            <option value="end" {{#if tieBreakStatIsEnd}}selected{{/if}}>END (Endurance)</option>
+            <option value="ego" {{#if tieBreakStatIsEgo}}selected{{/if}}>EGO (Ego)</option>
+          </select>
+        </div>
+        <p class="hint">Secondary characteristic used to break ties when multiple tokens share the same DEX in the acting order.</p>
+      </div>
+    </fieldset>
+
+    <fieldset class="hero-settings-group">
+      <legend><i class="fas fa-chart-bar"></i> Stat Display</legend>
+      <p class="hint" style="margin:2px 0 6px;">Thresholds are percentages of the stat's maximum. The pip bar changes color as the value drops through each tier.</p>
+      <div class="form-group">
+        <label>Less Threshold (%)</label>
+        <div class="form-fields">
+          <input type="number" name="statLessAt" value="{{statLessAt}}" min="0" max="100" step="1"/>
+        </div>
+        <p class="hint">At or above this % the bar shows "Less" (slightly below full). Default: 75.</p>
+      </div>
+      <div class="form-group">
+        <label>Half Threshold (%)</label>
+        <div class="form-fields">
+          <input type="number" name="statHalfAt" value="{{statHalfAt}}" min="0" max="100" step="1"/>
+        </div>
+        <p class="hint">At or above this % the bar shows "Half". Default: 50.</p>
+      </div>
+      <div class="form-group">
+        <label>Hurt Threshold (%)</label>
+        <div class="form-fields">
+          <input type="number" name="statHurtAt" value="{{statHurtAt}}" min="0" max="100" step="1"/>
+        </div>
+        <p class="hint">At or above this % the bar shows "Hurt". Below this (but above 0) shows "Risk". Default: 25.</p>
+      </div>
+      <div class="form-group">
+        <label>Color: Full</label>
+        <div class="form-fields">
+          <input type="color" name="statColorFull" value="{{statColorFull}}"/>
+        </div>
+        <p class="hint">Pip color when the stat is at 100%.</p>
+      </div>
+      <div class="form-group">
+        <label>Color: Less</label>
+        <div class="form-fields">
+          <input type="color" name="statColorLess" value="{{statColorLess}}"/>
+        </div>
+        <p class="hint">Pip color in the "Less" range (slightly below full).</p>
+      </div>
+      <div class="form-group">
+        <label>Color: Half</label>
+        <div class="form-fields">
+          <input type="color" name="statColorHalf" value="{{statColorHalf}}"/>
+        </div>
+        <p class="hint">Pip color in the "Half" range.</p>
+      </div>
+      <div class="form-group">
+        <label>Color: Hurt</label>
+        <div class="form-fields">
+          <input type="color" name="statColorHurt" value="{{statColorHurt}}"/>
+        </div>
+        <p class="hint">Pip color in the "Hurt" range.</p>
+      </div>
+      <div class="form-group">
+        <label>Color: Risk</label>
+        <div class="form-fields">
+          <input type="color" name="statColorRisk" value="{{statColorRisk}}"/>
+        </div>
+        <p class="hint">Pip color in the "Risk" range (dangerously low).</p>
+      </div>
+      <div class="form-group">
+        <label>Color: Out</label>
+        <div class="form-fields">
+          <input type="color" name="statColorOut" value="{{statColorOut}}"/>
+        </div>
+        <p class="hint">Pip color when the stat is at 0 or the token is incapacitated.</p>
+      </div>
+    </fieldset>
+
+  </div>
+  <footer class="sheet-footer flexrow">
+    <button type="submit"><i class="fas fa-save"></i> Save Changes</button>
+  </footer>
+</form>

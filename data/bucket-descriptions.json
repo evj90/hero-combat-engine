@@ -1,0 +1,154 @@
+{
+  "_default": {
+    "Full": "normal",
+    "Less": "diminished",
+    "Half": "strained",
+    "Hurt": "reduced",
+    "Risk": "critical",
+    "Out": "depleted"
+  },
+  "stun": {
+    "Full": "alert",
+    "Less": "winded",
+    "Half": "reeling",
+    "Hurt": "staggering",
+    "Risk": "fading",
+    "Out": "unconscious"
+  },
+  "body": {
+    "Full": "normal",
+    "Less": "bruised",
+    "Half": "injured",
+    "Hurt": "maimed",
+    "Risk": "dying",
+    "Out": "dead"
+  },
+  "end": {
+    "Full": "normal",
+    "Less": "taxed",
+    "Half": "fatigued",
+    "Hurt": "exhausted",
+    "Risk": "drained",
+    "Out": "spent"
+  },
+  "pre": {
+    "Full": "normal",
+    "Less": "diminished",
+    "Half": "hesitant",
+    "Hurt": "shaken",
+    "Risk": "cowed",
+    "Out": "broken"
+  },
+  "str": {
+    "Full": "normal",
+    "Less": "weakened",
+    "Half": "reduced",
+    "Hurt": "enfeebled",
+    "Risk": "failing",
+    "Out": "spent"
+  },
+  "dex": {
+    "Full": "normal",
+    "Less": "affected",
+    "Half": "clumsy",
+    "Hurt": "awkward",
+    "Risk": "fumbling",
+    "Out": "helpless"
+  },
+  "con": {
+    "Full": "normal",
+    "Less": "strained",
+    "Half": "weary",
+    "Hurt": "faltering",
+    "Risk": "collapsing",
+    "Out": "spent"
+  },
+  "int": {
+    "Full": "normal",
+    "Less": "distracted",
+    "Half": "foggy",
+    "Hurt": "confused",
+    "Risk": "fractured",
+    "Out": "blank"
+  },
+  "ego": {
+    "Full": "normal",
+    "Less": "shaken",
+    "Half": "wavering",
+    "Hurt": "fractured",
+    "Risk": "yielding",
+    "Out": "broken"
+  },
+  "rec": {
+    "Full": "normal",
+    "Less": "slower",
+    "Half": "lagging",
+    "Hurt": "weak",
+    "Risk": "failing",
+    "Out": "stalled"
+  },
+  "spd": {
+    "Full": "normal",
+    "Less": "sluggish",
+    "Half": "slow",
+    "Hurt": "dragging",
+    "Risk": "stalled",
+    "Out": "frozen"
+  },
+  "pd": {
+    "Full": "normal",
+    "Less": "thinned",
+    "Half": "exposed",
+    "Hurt": "vulnerable",
+    "Risk": "fragile",
+    "Out": "open"
+  },
+  "ed": {
+    "Full": "normal",
+    "Less": "thinned",
+    "Half": "exposed",
+    "Hurt": "vulnerable",
+    "Risk": "fragile",
+    "Out": "open"
+  },
+  "ocv": {
+    "Full": "normal",
+    "Less": "off",
+    "Half": "shaky",
+    "Hurt": "wild",
+    "Risk": "erratic",
+    "Out": "useless"
+  },
+  "dcv": {
+    "Full": "normal",
+    "Less": "readable",
+    "Half": "predictable",
+    "Hurt": "vulnerable",
+    "Risk": "exposed",
+    "Out": "defenseless"
+  },
+  "omcv": {
+    "Full": "normal",
+    "Less": "muted",
+    "Half": "blunted",
+    "Hurt": "weak",
+    "Risk": "faltering",
+    "Out": "silent"
+  },
+  "dmcv": {
+    "Full": "normal",
+    "Less": "thinned",
+    "Half": "strained",
+    "Hurt": "cracked",
+    "Risk": "open",
+    "Out": "collapsed"
+  },
+  "mcv": {
+    "Full": "normal",
+    "Less": "thinned",
+    "Half": "strained",
+    "Hurt": "unstable",
+    "Risk": "fraying",
+    "Out": "collapsed"
+  }
+}

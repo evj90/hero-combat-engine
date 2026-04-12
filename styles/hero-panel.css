@@ -1,0 +1,813 @@
+/* ── Hero Combat Tracker ─────────────────────────────────────── */
+
+.hero-tracker {
+  font-family: var(--font-primary, "Signika", serif);
+  --hero-btn-fg: #4a4a4a;
+  --hero-btn-bg: rgba(255, 255, 255, 0.46);
+  --hero-btn-border: #989898;
+  --hero-btn-hover-bg: rgba(255, 100, 0, 0.2);
+  --hero-btn-hover-border: #d45a00;
+  --hero-status-active-bg: rgba(200, 160, 20, 0.52);
+  --hero-status-active-border: #8f6f0d;
+}
+
+.hero-tracker.a11y-medium,
+.hero-tracker.a11y-expanded {
+  font-size: 1.14em;
+}
+
+.hero-tracker.a11y-medium .hero-tracker-btn,
+.hero-tracker.a11y-expanded .hero-tracker-btn {
+  padding: 3px 7px;
+  font-size: 0.95em;
+}
+
+.hero-tracker.a11y-medium #hero-combat-tracker .combatant,
+.hero-tracker.a11y-expanded #hero-combat-tracker .combatant {
+  padding: 3px 5px;
+}
+
+.hero-tracker.a11y-medium .hero-combatant-top,
+.hero-tracker.a11y-expanded .hero-combatant-top {
+  min-height: 40px;
+  gap: 6px;
+}
+
+.hero-tracker.a11y-medium .token-image,
+.hero-tracker.a11y-expanded .token-image {
+  flex: 0 0 42px;
+  width: 42px;
+  height: 42px;
+}
+
+.hero-tracker.a11y-medium #hero-combat-tracker .token-name h4,
+.hero-tracker.a11y-expanded #hero-combat-tracker .token-name h4 {
+  font-size: 1.02em;
+}
+
+.hero-tracker.a11y-medium .combatant-status,
+.hero-tracker.a11y-expanded .combatant-status {
+  font-size: 0.84em;
+}
+
+.hero-tracker.a11y-medium .hero-stat-lbl,
+.hero-tracker.a11y-expanded .hero-stat-lbl {
+  font-size: 0.72em;
+  width: 34px;
+}
+
+.hero-tracker.a11y-medium .hero-pip,
+.hero-tracker.a11y-expanded .hero-pip {
+  width: 11px;
+  height: 7px;
+}
+
+.hero-tracker.a11y-medium .hero-cv-row,
+.hero-tracker.a11y-expanded .hero-cv-row {
+  min-width: 54px;
+}
+
+.hero-tracker.a11y-medium .hero-cv-lbl,
+.hero-tracker.a11y-medium .hero-cv-val,
+.hero-tracker.a11y-expanded .hero-cv-lbl,
+.hero-tracker.a11y-expanded .hero-cv-val {
+  font-size: 0.74em;
+}
+
+.hero-tracker.a11y-medium .hero-status-btn,
+.hero-tracker.a11y-medium .hero-cover-btn,
+.hero-tracker.a11y-medium #hero-combat-tracker .combatant-control,
+.hero-tracker.a11y-expanded .hero-status-btn,
+.hero-tracker.a11y-expanded .hero-cover-btn,
+.hero-tracker.a11y-expanded #hero-combat-tracker .combatant-control {
+  width: 26px;
+  height: 26px;
+  font-size: 0.88em;
+}
+
+.hero-tracker.a11y-medium .hero-status-btn img,
+.hero-tracker.a11y-medium .hero-effect-icon,
+.hero-tracker.a11y-expanded .hero-status-btn img,
+.hero-tracker.a11y-expanded .hero-effect-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.hero-tracker.a11y-medium .hero-cover-badge,
+.hero-tracker.a11y-medium .hero-fp-badge,
+.hero-tracker.a11y-expanded .hero-cover-badge,
+.hero-tracker.a11y-expanded .hero-fp-badge {
+  font-size: 0.66em;
+}
+
+.hero-tracker.a11y-medium .hero-adjustment-badge,
+.hero-tracker.a11y-expanded .hero-adjustment-badge {
+  font-size: 0.72em;
+  padding: 2px 4px;
+}
+
+.hero-tracker.a11y-large {
+  font-size: 1.28em;
+}
+
+.hero-tracker.a11y-large .hero-tracker-btn {
+  padding: 4px 9px;
+  font-size: 1em;
+}
+
+.hero-tracker.a11y-large #hero-combat-tracker .combatant {
+  padding: 4px 6px;
+}
+
+.hero-tracker.a11y-large .hero-combatant-top {
+  min-height: 46px;
+  gap: 7px;
+}
+
+.hero-tracker.a11y-large .token-image {
+  flex: 0 0 46px;
+  width: 46px;
+  height: 46px;
+}
+
+.hero-tracker.a11y-large #hero-combat-tracker .token-name h4 {
+  font-size: 1.08em;
+}
+
+.hero-tracker.a11y-large .combatant-status {
+  font-size: 0.9em;
+}
+
+.hero-tracker.a11y-large .hero-stat-lbl {
+  font-size: 0.76em;
+  width: 38px;
+}
+
+.hero-tracker.a11y-large .hero-pip {
+  width: 12px;
+  height: 8px;
+}
+
+.hero-tracker.a11y-large .hero-cv-row {
+  min-width: 60px;
+}
+
+.hero-tracker.a11y-large .hero-cv-lbl,
+.hero-tracker.a11y-large .hero-cv-val {
+  font-size: 0.8em;
+}
+
+.hero-tracker.a11y-large .hero-status-btn,
+.hero-tracker.a11y-large .hero-cover-btn,
+.hero-tracker.a11y-large #hero-combat-tracker .combatant-control {
+  width: 30px;
+  height: 30px;
+  font-size: 0.96em;
+}
+
+.hero-tracker.a11y-large .hero-status-btn img,
+.hero-tracker.a11y-large .hero-effect-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.hero-tracker.a11y-large .hero-cover-badge,
+.hero-tracker.a11y-large .hero-fp-badge {
+  font-size: 0.72em;
+}
+
+.hero-tracker.a11y-large .hero-adjustment-badge {
+  font-size: 0.78em;
+  padding: 2px 5px;
+}
+
+/* Header navigation bar */
+.hero-tracker .encounter-controls {
+  padding: 0 2px;
+  border-bottom: 1px solid var(--color-border-light-tertiary, #aaa);
+  align-items: center;
+}
+
+.hero-tracker .segment-nav {
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+}
+
+.hero-tracker .encounter-title {
+  text-align: center;
+  font-size: 1em;
+  margin: 0;
+  line-height: 1.4;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Shared tracker button style (matches .encounter-control) */
+.hero-tracker-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 4px;
+  cursor: pointer;
+  font-size: 0.85em;
+  white-space: nowrap;
+  text-decoration: none;
+  color: inherit;
+  border-radius: 2px;
+}
+
+.hero-tracker-btn:hover {
+  text-shadow: 0 0 6px var(--color-shadow-primary, #ff6400);
+  color: var(--color-text-hyperlink, #ff6400);
+}
+
+.hero-tracker-btn.active {
+  color: var(--color-border-highlight, #ff6400);
+  text-shadow: 0 0 6px var(--color-shadow-primary, #ff6400);
+}
+
+/* GM controls row beneath the header */
+.hero-gm-controls {
+  padding: 1px 3px;
+  border-bottom: 1px solid var(--color-border-light-tertiary, #aaa);
+  gap: 2px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Combatant list */
+#hero-combat-tracker {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+#hero-combat-tracker .combatant {
+  padding: 1px 3px;
+  border-bottom: 1px solid var(--color-border-light-tertiary, #ccc);
+  gap: 0;
+  min-height: unset;
+  border-left: 3px solid transparent;
+}
+
+.hero-combatant-top {
+  align-items: center;
+  gap: 3px;
+  min-height: 32px;
+}
+
+#hero-combat-tracker .combatant.acting {
+  background: rgba(255, 100, 0, 0.12);
+  border-left-color: var(--color-border-highlight, #ff6400);
+  border-left-width: 4px;
+}
+
+#hero-combat-tracker .combatant.can-act {
+  background: rgba(50, 180, 50, 0.07);
+  border-left-color: #4caf50;
+}
+
+#hero-combat-tracker .combatant.has-acted {
+  opacity: 0.55;
+  background: rgba(100, 100, 100, 0.06);
+  border-left-color: #888;
+}
+
+#hero-combat-tracker .combatant.held {
+  background: rgba(200, 160, 20, 0.07);
+  border-left-color: #c8a020;
+}
+
+#hero-combat-tracker .combatant.waiting {
+  opacity: 0.5;
+}
+
+.token-image {
+  border-radius: 50%;
+  border: 1px solid var(--color-border-light-secondary, #aaa);
+  object-fit: cover;
+  flex: 0 0 36px;
+}
+
+#hero-combat-tracker .combatant.acting .token-image {
+  border-color: var(--color-border-highlight, #ff6400);
+  box-shadow: 0 0 5px var(--color-shadow-primary, #ff6400);
+}
+
+#hero-combat-tracker .token-name {
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.hero-name-col {
+  flex: 1;
+  min-width: 0;
+}
+
+#hero-combat-tracker .token-name h4 {
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.95em;
+  font-weight: 600;
+}
+
+.combatant-status {
+  font-size: 0.75em;
+  font-style: italic;
+  color: var(--color-text-dark-secondary, #888);
+}
+
+.hero-stat-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex-shrink: 0;
+}
+
+.hero-cv-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-left: 4px;
+  flex-shrink: 0;
+  padding: 1px 3px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  transition: background 0.12s, border-color 0.12s;
+  cursor: context-menu;
+}
+
+.hero-cv-stack:hover {
+  background: rgba(70, 130, 180, 0.12);
+  border-color: rgba(70, 130, 180, 0.45);
+}
+
+.hero-cv-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 3px;
+  min-width: 44px;
+  line-height: 1;
+}
+
+.hero-cv-lbl {
+  font-size: 0.58em;
+  font-weight: 700;
+  color: var(--color-text-dark-secondary, #888);
+}
+
+.hero-cv-val {
+  font-size: 0.62em;
+  font-weight: 700;
+  color: var(--color-text-dark-primary, #444);
+  min-width: 12px;
+  text-align: right;
+}
+
+.hero-stat-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  cursor: default;
+}
+
+.hero-stat-lbl {
+  font-size: 0.62em;
+  font-weight: bold;
+  color: var(--color-text-dark-secondary, #888);
+  width: 26px;
+  flex-shrink: 0;
+  line-height: 1;
+  margin-left: 1px;
+}
+
+.hero-stat-lbl.depleted {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+.hero-pips {
+  display: flex;
+  gap: 2px;
+}
+
+.hero-pip {
+  width: 9px;
+  height: 5px;
+  border-radius: 1px;
+  background: transparent;
+  border: 1px solid var(--color-border-light-secondary, #bbb);
+  flex-shrink: 0;
+}
+
+.hero-pip.filled {
+  background: var(--pip-color, #4caf50);
+  border-color: var(--pip-color, #4caf50);
+}
+
+.hero-pip.filled {
+  background: var(--pip-color, #4caf50);
+}
+
+.hero-abort-badge {
+  display: inline-block;
+  font-size: 0.65em;
+  font-weight: bold;
+  color: #e53935;
+  background: rgba(229, 57, 53, 0.1);
+  border: 1px solid rgba(229, 57, 53, 0.4);
+  border-radius: 2px;
+  padding: 0 3px;
+  margin-left: 4px;
+  vertical-align: middle;
+  letter-spacing: 0.05em;
+}
+
+.token-resources {
+  text-align: center;
+  font-size: 0.8em;
+  color: var(--color-text-dark-secondary, #888);
+  min-width: 36px;
+}
+
+.token-resources .resource::before {
+  content: "SPD\00a0";
+  opacity: 0.7;
+}
+
+#hero-combat-tracker .combatant-controls {
+  gap: 2px;
+  flex: 0 0 auto;
+  width: 100%;
+  padding: 1px 4px 2px;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 18px;
+}
+
+/* Status toggle strip */
+.hero-status-toggles {
+  display: flex;
+  gap: 1px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.hero-status-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 20px;
+  height: 20px;
+  border-radius: 2px;
+  border: 1px solid var(--color-border-light-secondary, #aaa);
+  cursor: pointer;
+  font-size: 0.7em;
+  color: var(--hero-btn-fg, #4a4a4a);
+  opacity: 0.92;
+  background: var(--hero-btn-bg, rgba(255, 255, 255, 0.46));
+  border-color: var(--hero-btn-border, #989898);
+  text-decoration: none;
+  transition: opacity 0.1s, background 0.1s, color 0.1s, box-shadow 0.1s;
+}
+
+.hero-status-btn img {
+  border: none;
+  border-radius: 1px;
+  object-fit: contain;
+  opacity: 0.95;
+  filter: grayscale(0.1) contrast(1.05);
+}
+
+.hero-status-btn.active {
+  opacity: 1;
+  background: var(--hero-status-active-bg, rgba(200, 160, 20, 0.52));
+  border-color: var(--hero-status-active-border, #8f6f0d);
+  border-width: 2px;
+  box-shadow: 0 0 8px rgba(200, 160, 20, 0.72);
+}
+
+.hero-status-btn.active img {
+  opacity: 1;
+  filter: none;
+}
+
+/* Flash-point counter badge on blind/deaf buttons */
+.hero-fp-badge {
+  position: absolute;
+  bottom: -3px;
+  right: -3px;
+  font-size: 0.6em;
+  font-weight: 700;
+  line-height: 1;
+  background: #c8a020;
+  color: #fff;
+  border-radius: 3px;
+  padding: 0 2px;
+  pointer-events: none;
+}
+
+
+.hero-status-btn:hover:not(.read-only) {
+  opacity: 1;
+  background: var(--hero-btn-hover-bg, rgba(255, 100, 0, 0.2));
+  border-color: var(--hero-btn-hover-border, #d45a00);
+  box-shadow: 0 0 5px rgba(255, 100, 0, 0.35);
+}
+
+.hero-status-btn:hover:not(.read-only) img {
+  opacity: 1;
+  filter: none;
+}
+
+.hero-status-btn.read-only {
+  cursor: default;
+  pointer-events: none;
+}
+
+.hero-cover-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 20px;
+  height: 20px;
+  border-radius: 2px;
+  border: 1px solid var(--color-border-light-secondary, #aaa);
+  color: var(--color-text-dark-secondary, #888);
+  background: transparent;
+  opacity: 0.8;
+  text-decoration: none;
+  cursor: pointer;
+  transition: opacity 0.1s, background 0.1s, color 0.1s;
+}
+
+.hero-cover-btn i {
+  font-size: 0.78em;
+  opacity: 0.95;
+}
+
+.hero-cover-btn:hover:not(.read-only) {
+  opacity: 1;
+  background: rgba(70, 130, 180, 0.15);
+  border-color: #4682b4;
+  color: #2e5f85;
+}
+
+.hero-cover-btn.active {
+  opacity: 1;
+  background: rgba(70, 130, 180, 0.28);
+  border-color: #4682b4;
+  border-width: 2px;
+  box-shadow: 0 0 4px rgba(70, 130, 180, 0.45);
+  color: #1f4f74;
+}
+
+.hero-cover-btn.read-only {
+  cursor: default;
+  pointer-events: none;
+}
+
+.hero-cover-badge {
+  position: absolute;
+  bottom: -3px;
+  right: -3px;
+  font-size: 0.58em;
+  font-weight: 700;
+  line-height: 1;
+  background: #4682b4;
+  color: #fff;
+  border-radius: 3px;
+  padding: 0 2px;
+  pointer-events: none;
+}
+
+/* Separator between status badges and action buttons */
+.hero-ctrl-sep {
+  flex: 1;
+}
+
+#hero-combat-tracker .combatant-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 0.75em;
+  text-decoration: none;
+  color: var(--hero-btn-fg, #4a4a4a);
+  background: var(--hero-btn-bg, rgba(255, 255, 255, 0.46));
+  border: 1px solid var(--hero-btn-border, #989898);
+  opacity: 0.9;
+}
+
+/* Ping and Pan should remain easy to spot */
+#hero-combat-tracker .hero-ping-token,
+#hero-combat-tracker .hero-pan-token {
+  opacity: 0.96;
+  border-color: rgba(46, 95, 133, 0.85);
+  background: rgba(70, 130, 180, 0.2);
+  color: #254e70;
+}
+
+/* Release Hold button is always amber and visible */
+#hero-combat-tracker .hero-release-hold {
+  opacity: 1;
+  color: #c8a020;
+}
+#hero-combat-tracker .hero-release-hold i {
+  opacity: 1;
+  color: #c8a020;
+}
+#hero-combat-tracker .hero-release-hold:hover {
+  background: #c8a020;
+  border-color: #c8a020;
+  color: #fff;
+}
+#hero-combat-tracker .hero-release-hold:hover i { color: #fff; }
+
+/* Abort active tint */
+#hero-combat-tracker .hero-abort-token.active {
+  opacity: 1;
+  color: #e53935;
+}
+
+#hero-combat-tracker .combatant-control i {
+  opacity: 1;
+}
+
+#hero-combat-tracker .combatant-control:hover {
+  background: var(--hero-btn-hover-bg, rgba(255, 100, 0, 0.2));
+  border-color: var(--hero-btn-hover-border, #d45a00);
+  color: #fff;
+  opacity: 1;
+  box-shadow: 0 0 5px rgba(255, 100, 0, 0.38);
+}
+
+#hero-combat-tracker .combatant-control:hover i {
+  opacity: 1;
+}
+
+/* End-turn buttons use green to signal primary action */
+#hero-combat-tracker .hero-end-segment:hover,
+#hero-combat-tracker .hero-take-recovery:hover {
+  background: #4caf50;
+  border-color: #4caf50;
+  color: #fff;
+  opacity: 1;
+}
+
+/* "No combat" placeholder */
+.hero-tracker .no-results {
+  padding: 10px;
+  text-align: center;
+  color: var(--color-text-dark-secondary, #888);
+}
+
+/* SPD acting bar */
+.hero-spd-acting {
+  padding: 1px 6px 1px 8px;
+  font-size: 0.78em;
+  border-bottom: 1px solid var(--color-border-light-tertiary, #ccc);
+  border-left: 3px solid #4caf50;
+  color: var(--color-text-dark-secondary, #888);
+}
+
+.hero-spd-label {
+  font-style: italic;
+  margin-right: 3px;
+}
+
+/* Active effect icons */
+.hero-effect-icon {
+  border-radius: 2px;
+  border: none;
+  object-fit: cover;
+  opacity: 0.85;
+}
+
+/* Stale token warning banner */
+.hero-stale-warning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  font-size: 0.78em;
+  color: #7a4800;
+  background: rgba(255, 180, 0, 0.15);
+  border-bottom: 1px solid rgba(255, 180, 0, 0.4);
+}
+.hero-stale-warning i {
+  color: #c88000;
+  flex-shrink: 0;
+}
+
+/* Settings menu form */
+.hero-settings-form {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+.hero-settings-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px;
+}
+.hero-settings-group {
+  border: 1px solid var(--color-border-light-secondary, #aaa);
+  border-radius: 4px;
+  padding: 6px 10px 4px;
+  margin-bottom: 10px;
+}
+.hero-settings-group legend {
+  font-weight: bold;
+  font-size: 0.85em;
+  padding: 0 4px;
+  color: var(--color-text-dark-primary, #333);
+}
+.hero-settings-form .form-group {
+  display: grid;
+  grid-template-columns: 10rem 1fr;
+  align-items: center;
+  gap: 4px 8px;
+  margin-bottom: 4px;
+}
+.hero-settings-form .form-group label {
+  font-size: 0.82em;
+  line-height: 1.3;
+}
+.hero-settings-form .form-group .hint {
+  grid-column: 1 / -1;
+  font-size: 0.75em;
+  color: var(--color-text-dark-secondary, #888);
+  margin: 0 0 2px;
+  font-style: italic;
+}
+.hero-settings-form .sheet-footer {
+  padding: 6px 12px;
+  border-top: 1px solid var(--color-border-light-tertiary, #aaa);
+}
+
+/* ── Drain/Aid adjustment badges ─────────────────────────────── */
+.hero-adjustment-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.6em;
+  font-weight: 700;
+  padding: 1px 3px;
+  border-radius: 3px;
+  cursor: context-menu;
+  line-height: 1.2;
+  user-select: none;
+  margin: 0 1px;
+}
+
+.hero-adj-drain {
+  background: rgba(200, 50, 50, 0.12);
+  border: 1px solid #c83232;
+  color: #c83232;
+}
+
+.hero-adj-aid {
+  background: rgba(76, 175, 80, 0.12);
+  border: 1px solid #4caf50;
+  color: #2e7d32;
+}
+
+.hero-adj-entangle {
+  background: rgba(46, 95, 133, 0.14);
+  border: 1px solid #2e5f85;
+  color: #1f4563;
+}
+
+.hero-adjustment-badge:hover {
+  filter: brightness(1.25);
+}
+
+/* GM "add adjustment" button */
+.hero-add-adjustment {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  font-size: 0.65em;
+  opacity: 0.7;
+  cursor: pointer;
+  color: var(--color-text-dark-secondary, #888);
+}
+
+.hero-add-adjustment:hover {
+  opacity: 1;
+  color: var(--color-border-highlight, #ff6400);
+}

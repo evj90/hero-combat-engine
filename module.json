@@ -1,0 +1,49 @@
+{
+  "id": "hero-combat-engine",
+  "name": "hero-combat-engine",
+  "title": "HERO Combat Engine",
+  "description": "A custom HERO System combat engine with segment/phase timing, highlighting, and a floating control panel.",
+  "version": "1.1.0",
+  "type": "module",
+
+  "compatibility": {
+    "minimum": "11",
+    "verified": "11"
+  },
+
+  "socket": true,
+
+  "authors": [
+    {
+      "name": "Evan"
+    }
+  ],
+
+  "esmodules": [
+    "scripts/main.js"
+  ],
+
+  "styles": [
+    "styles/hero-panel.css"
+  ],
+
+  "languages": [
+    {
+      "lang": "en",
+      "name": "English",
+      "path": "lang/en.json"
+    }
+  ],
+
+  "packs": [
+    {
+      "name": "hero-macros",
+      "label": "HERO Combat Engine Macros",
+      "path": "packs/hero-macros.db",
+      "type": "Macro"
+    }
+  ],
+
+  "manifest": "https://raw.githubusercontent.com/evj90/hero-combat-engine/main/module.json",
+  "download": "https://github.com/evj90/hero-combat-engine/archive/refs/heads/main.zip"
+}

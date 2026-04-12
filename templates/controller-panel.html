@@ -1,0 +1,181 @@
+<div class="hero-tracker{{accessibilityClass}}">
+  <header class="encounter-controls flexrow">
+    <nav class="segment-nav flexrow">
+      {{#if isGM}}
+      <a class="encounter-control hero-tracker-btn" id="hero-prev-segment" title="Previous Segment">
+        <i class="fas fa-step-backward"></i>
+      </a>
+      <a class="encounter-control hero-tracker-btn" id="hero-prev-token" title="Previous Token">
+        <i class="fas fa-chevron-left"></i>
+      </a>
+      {{/if}}
+      <h3 class="encounter-title flex1">Segment {{phase}}.{{segment}}</h3>
+      {{#if isGM}}
+      <a class="encounter-control hero-tracker-btn" id="hero-next-token" title="Next Token">
+        <i class="fas fa-chevron-right"></i>
+      </a>
+      <a class="encounter-control hero-tracker-btn" id="hero-next-segment" title="Next Segment">
+        <i class="fas fa-step-forward"></i>
+      </a>
+      {{/if}}
+      <a class="encounter-control hero-tracker-btn{{#if hideNonActing}} active{{/if}}" id="hero-toggle-hide-non-acting" title="{{#if hideNonActing}}Show all tokens{{else}}Hide non-acting tokens{{/if}}">
+        <i class="fas fa-eye{{#if hideNonActing}}-slash{{/if}}"></i>
+      </a>
+    </nav>
+  </header>
+
+  {{#if isGM}}
+  <nav class="directory-header flexrow hero-gm-controls">
+    <a class="encounter-control hero-tracker-btn" id="hero-begin-combat" title="Begin Combat">
+      <i class="fas fa-fist-raised"></i> Begin
+    </a>
+    <a class="encounter-control hero-tracker-btn" id="hero-add-selected" title="Add Selected Tokens to Combat">
+      <i class="fas fa-plus"></i> Add
+    </a>
+    <a class="encounter-control hero-tracker-btn" id="hero-remove-selected" title="Remove Selected Tokens from Combat">
+      <i class="fas fa-minus"></i> Remove
+    </a>
+    <a class="encounter-control hero-tracker-btn" id="hero-highlight" title="Pulse actors this segment">
+      <i class="fas fa-crosshairs"></i> Acting
+    </a>
+    <a class="encounter-control hero-tracker-btn" id="hero-refresh-order" title="Refresh Combat Order (re-sort by current DEX/SPD)">
+      <i class="fas fa-rotate"></i> Refresh
+    </a>
+    <a class="encounter-control hero-tracker-btn" id="hero-end-combat" title="End Combat">
+      <i class="fas fa-flag-checkered"></i> End
+    </a>
+  </nav>
+  {{/if}}
+
+  {{#if hasStaleTokens}}
+  <div class="hero-stale-warning">
+    <i class="fas fa-triangle-exclamation"></i>
+    {{staleCount}} token{{#if stalePlural}}s{{/if}} missing from canvas — Refresh to clean up.
+  </div>
+  {{/if}}
+
+  {{#if combatants.length}}
+  {{#if actingSPDs.length}}
+  <div class="hero-spd-acting">
+    <span class="hero-spd-label"><strong>SPD Acting:</strong></span>
+    {{#each actingSPDs}}{{this}}{{#unless @last}}, {{/unless}}{{/each}}
+  </div>
+  {{/if}}
+  <ol id="hero-combat-tracker" class="directory-list">
+    {{#each combatants}}
+    <li class="combatant actor flexcol {{stateClass}}" data-token-id="{{id}}">
+      <div class="hero-combatant-top flexrow">
+        <img class="token-image" src="{{img}}" title="{{name}}" width="36" height="36"/>
+        <div class="token-name flexrow">
+          <div class="hero-name-col flexcol">
+            <h4>{{name}}</h4>
+            <span class="combatant-status">{{statusText}}</span>
+            {{#if isAborted}}<span class="hero-abort-badge" title="Abort declared">ABT</span>{{/if}}
+          </div>
+          {{#if canSeeStats}}
+          <div class="hero-stat-bars">
+            {{#each statBars}}
+            <div class="hero-stat-bar" title="{{tooltip}}" style="--pip-color: {{bucket.color}}">
+              <span class="hero-pips">{{#each pips}}<span class="hero-pip{{#if this}} filled{{/if}}"></span>{{/each}}</span>
+              <span class="hero-stat-lbl{{#if bucket.isOut}} depleted{{/if}}">{{label}}</span>
+            </div>
+            {{/each}}
+          </div>
+          <div class="hero-cv-stack" data-token-id="{{id}}" title="Combat Values (right-click to apply temporary modifiers)">
+            <div class="hero-cv-row"><span class="hero-cv-lbl">OCV</span><span class="hero-cv-val">{{ocv}}</span></div>
+            <div class="hero-cv-row"><span class="hero-cv-lbl">DCV</span><span class="hero-cv-val">{{dcv}}</span></div>
+            <div class="hero-cv-row"><span class="hero-cv-lbl">MCV</span><span class="hero-cv-val">{{mcv}}</span></div>
+          </div>
+          {{/if}}
+        </div>
+        {{#if showSpdColumn}}
+        <div class="token-resources">
+          <span class="resource" title="SPD">{{spd}}</span>
+        </div>
+        {{/if}}
+      </div>
+      <div class="combatant-controls flexrow">
+        <div class="hero-status-toggles">
+          {{#each quickStatuses}}
+          <a class="hero-status-btn{{#if active}} active{{/if}}{{#unless canToggle}} read-only{{/unless}}"
+             data-token-id="{{../id}}" data-status-id="{{id}}" title="{{label}}{{#if flashPoints}} — {{flashPoints}} FP remaining (right-click to manage){{/if}}">
+            <img src="{{icon}}" width="14" height="14"/>
+            {{#if flashPoints}}<span class="hero-fp-badge">{{flashPoints}}</span>{{/if}}
+          </a>
+          {{/each}}
+          {{#each effects}}
+          <img class="hero-effect-icon" src="{{icon}}" title="{{label}}" width="14" height="14"/>
+          {{/each}}
+          {{#each adjustments}}
+          <span class="hero-adjustment-badge hero-adj-{{type}}"
+                data-token-id="{{../id}}" data-adj-id="{{id}}"
+                title="{{type}} {{char}}: {{points}} pts remaining (fades {{fadeRate}}/{{fadeUnitLabel}}) — right-click to manage">
+            {{#if isDrain}}D{{else}}A{{/if}}:{{char}} {{points}}
+          </span>
+          {{/each}}
+          {{#if entangleBody}}
+          <span class="hero-adjustment-badge hero-adj-entangle hero-entangle-badge"
+                data-token-id="{{id}}"
+                title="Entangle BODY: {{entangleBody}} remaining — right-click to manage">
+            ENT {{entangleBody}}
+          </span>
+          {{/if}}
+          {{#if isGM}}
+          <a class="hero-add-adjustment hero-tracker-btn" data-token-id="{{id}}" title="Track Drain or Aid">
+            <i class="fas fa-plus-minus"></i>
+          </a>
+          {{/if}}
+          <a class="hero-cover-btn{{#if coverDCV}} active{{/if}}{{#unless canToggleCover}} read-only{{/unless}}"
+             data-token-id="{{id}}"
+             title="Cover — {{coverStageLabel}}{{#if coverDCV}} (+{{coverDCV}} DCV){{/if}} (left-click cycles None, Some, Half, Good; right-click sets directly)">
+            <i class="fas fa-shield-alt"></i>
+            {{#if coverDCV}}<span class="hero-cover-badge">+{{coverDCV}}</span>{{/if}}
+          </a>
+        </div>
+        <span class="hero-ctrl-sep"></span>
+        <a class="combatant-control hero-ping-token" data-token-id="{{id}}" title="Ping Token">
+          <i class="fas fa-bullseye"></i>
+        </a>
+        <a class="combatant-control hero-pan-token" data-token-id="{{id}}" title="Pan to Token">
+          <i class="fas fa-location-arrow"></i>
+        </a>
+        {{#if allowHold}}
+        <a class="combatant-control hero-hold-token" data-token-id="{{id}}" title="Declare Hold — skip phase, act later">
+          <i class="fas fa-hand"></i>
+        </a>
+        {{/if}}
+        {{#if allowRelease}}
+        <a class="combatant-control hero-release-hold active" data-token-id="{{id}}" title="Release Hold — act now">
+          <i class="fas fa-hand"></i>
+        </a>
+        {{/if}}
+        {{#if allowAbort}}
+        <a class="combatant-control hero-abort-token{{#if isAborted}} active{{/if}}" data-token-id="{{id}}" title="{{#if isAborted}}Cancel Abort{{else}}Declare Abort{{/if}}">
+          <i class="fas fa-bolt"></i>
+        </a>
+        {{/if}}
+        {{#if allowEndTurn}}
+        <a class="combatant-control hero-take-recovery" data-token-id="{{id}}" title="Take Recovery &amp; End Turn">
+          <i class="fas fa-heart-pulse"></i>
+        </a>
+        <a class="combatant-control hero-end-segment" data-token-id="{{id}}" title="End Turn">
+          <i class="fas fa-check"></i>
+        </a>
+        {{/if}}
+        {{#if allowRemove}}
+        <a class="combatant-control hero-remove-combatant" data-token-id="{{id}}" title="Remove from Combat">
+          <i class="fas fa-trash"></i>
+        </a>
+        {{/if}}
+      </div>
+    </li>
+    {{/each}}
+  </ol>
+  {{else}}
+  {{#if hasCombatants}}
+  <p class="no-results"><em>No tokens act this segment.</em></p>
+  {{else}}
+  <p class="no-results"><em>No combat in progress.</em></p>
+  {{/if}}
+  {{/if}}
+</div>
