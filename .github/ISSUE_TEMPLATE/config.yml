@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Discussion / Question
+    url: https://github.com/evj90/hero-combat-engine/discussions
+    about: Ask questions and discuss the module in GitHub Discussions.
+  - name: Foundry VTT Discord
+    url: https://discord.gg/foundryvtt
+    about: General Foundry VTT help and community support.

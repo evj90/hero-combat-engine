@@ -1,0 +1,63 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Package and publish release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read version from module.json
+        id: meta
+        run: |
+          VERSION=$(jq -r '.version' module.json)
+          TITLE=$(jq -r '.title' module.json)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "title=$TITLE" >> $GITHUB_OUTPUT
+
+      - name: Create release zip
+        run: |
+          ZIP_NAME="hero-combat-engine-v${{ steps.meta.outputs.version }}.zip"
+          zip -r "$ZIP_NAME" . \
+            --exclude ".git/*" \
+            --exclude ".github/*" \
+            --exclude "node_modules/*" \
+            --exclude "tools/*" \
+            --exclude "*.zip" \
+            --exclude ".gitignore" \
+            --exclude "CHANGELOG.md" \
+            --exclude "CONTRIBUTING.md" \
+            --exclude "DEVELOPMENT.md" \
+            --exclude "CODE_OF_CONDUCT.md" \
+            --exclude "SECURITY.md"
+          echo "zip_name=$ZIP_NAME" >> $GITHUB_ENV
+
+      - name: Extract changelog entry
+        id: changelog
+        run: |
+          # Extract the section for this version from CHANGELOG.md
+          VERSION="${{ steps.meta.outputs.version }}"
+          CHANGELOG=$(awk "/^## v$VERSION/{found=1; next} found && /^## v/{exit} found{print}" CHANGELOG.md)
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "${{ steps.meta.outputs.title }} v${{ steps.meta.outputs.version }}"
+          body: ${{ steps.changelog.outputs.body }}
+          files: |
+            ${{ env.zip_name }}
+            module.json

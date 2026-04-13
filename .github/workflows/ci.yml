@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lint:
+    name: Validate module
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate module.json
+        run: |
+          echo "Checking module.json is valid JSON..."
+          jq empty module.json
+          echo "module.json is valid."
+
+      - name: Check required files exist
+        run: |
+          for f in module.json readme.md CHANGELOG.md LICENSE scripts/main.js styles/hero-panel.css; do
+            if [ ! -f "$f" ]; then
+              echo "Missing required file: $f"
+              exit 1
+            fi
+          done
+          echo "All required files present."
+
+      - name: Check for syntax errors in JS (Node parse check)
+        run: |
+          node_version=$(node --version 2>/dev/null || echo "none")
+          echo "Node: $node_version"
+          # Parse-check each JS file; exit non-zero on error
+          find scripts -name "*.js" | while read f; do
+            node --input-type=module < "$f" 2>&1 | grep -v "^$" || true
+            node -e "
+              const fs = require('fs');
+              try {
+                new Function(fs.readFileSync('$f', 'utf8'));
+                process.stdout.write('OK: $f\n');
+              } catch(e) {
+                process.stderr.write('FAIL: $f — ' + e.message + '\n');
+                process.exit(1);
+              }
+            "
+          done
+
+      - name: Validate version tag consistency
+        run: |
+          MODULE_VERSION=$(jq -r '.version' module.json)
+          CHANGELOG_VERSION=$(grep -m1 "^## v" CHANGELOG.md | sed 's/## v//')
+          echo "module.json version: $MODULE_VERSION"
+          echo "CHANGELOG latest version: $CHANGELOG_VERSION"
+          if [ "$MODULE_VERSION" != "$CHANGELOG_VERSION" ]; then
+            echo "WARNING: module.json version ($MODULE_VERSION) does not match latest CHANGELOG entry ($CHANGELOG_VERSION)"
+          fi
