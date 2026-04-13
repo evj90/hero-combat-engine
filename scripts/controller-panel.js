@@ -1,4 +1,5 @@
 import { getActingTokens } from "./segment-engine.js";
+import { combatEngineSpeaker } from "./utils.js";
 
 // ── Quick-toggle status conditions shown in the tracker ─────────
 // IDs match Foundry v11 core CONFIG.statusEffects keys.
@@ -12,17 +13,69 @@ const HERO_QUICK_STATUSES = [
 
 const COVER_STAGES = [
   { dcv: 0, label: "None" },
-  { dcv: 1, label: "Some" },
-  { dcv: 2, label: "Half" },
-  { dcv: 3, label: "Good" }
+  { dcv: 1, label: "Low" },
+  { dcv: 2, label: "Medium" },
+  { dcv: 3, label: "High" }
+];
+
+const OCV_STAGES = [
+  { ocv: 0, label: "None" },
+  { ocv: 1, label: "Low" },
+  { ocv: 2, label: "Medium" },
+  { ocv: 3, label: "High" }
+];
+
+const MCV_STAGES = [
+  { mcv: 0, label: "None" },
+  { mcv: 1, label: "Low" },
+  { mcv: 2, label: "Medium" },
+  { mcv: 3, label: "High" }
 ];
 
 function getCoverStage(dcv) {
   return COVER_STAGES.find(s => s.dcv === dcv) ?? COVER_STAGES[0];
 }
 
+function getOcvStage(ocv) {
+  return OCV_STAGES.find(s => s.ocv === ocv) ?? OCV_STAGES[0];
+}
+
+function getMcvStage(mcv) {
+  return MCV_STAGES.find(s => s.mcv === mcv) ?? MCV_STAGES[0];
+}
+
 function normalizeFadeInterval(interval) {
   return interval === "segment" ? "segment" : "phase";
+}
+
+function normalizeAdjustmentCharKey(char) {
+  return String(char ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, "");
+}
+
+function getAdjustmentBaseCharacteristicValue(actor, statKey) {
+  if (statKey === "mcv") {
+    const chars = actor.system?.characteristics ?? {};
+    return Number(chars.mcv?.value ?? chars.dmcv?.value ?? chars.omcv?.value ?? 0);
+  }
+  return Number(actor.system?.characteristics?.[statKey]?.value ?? 0);
+}
+
+function getAdjustmentTargetDelta(baseValue, points, type) {
+  const pct = Math.max(0, Number(points ?? 0));
+  const magnitude = Math.round((Number(baseValue ?? 0) * pct) / 100);
+  return type === "drain" ? -Math.abs(magnitude) : Math.abs(magnitude);
+}
+
+function getAdjustmentUpdateData(actor, statKey, delta) {
+  if (!delta) return {};
+  if (statKey === "mcv") return getMCVUpdateData(actor, delta);
+  const chars = actor.system?.characteristics ?? {};
+  return {
+    [`system.characteristics.${statKey}.value`]: (chars?.[statKey]?.value ?? 0) + delta
+  };
 }
 
 function isEntangleStatus(statusId) {
@@ -52,6 +105,68 @@ function getNestedValue(obj, path) {
 function asNumber(value, fallback = 0) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
+}
+
+function stripHtml(value) {
+  return String(value ?? "")
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getLightningReflexesIndicator(actor) {
+  const lrItem = (actor?.items ?? []).find(item => {
+    const haystacks = [
+      item?.name,
+      getNestedValue(item, "system.name"),
+      getNestedValue(item, "system.effect"),
+      getNestedValue(item, "system.description"),
+      getNestedValue(item, "system.description.value"),
+      getNestedValue(item, "system.notes"),
+      getNestedValue(item, "system.summary")
+    ]
+      .map(value => String(value ?? ""))
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return /lightning\s*reflex/i.test(haystacks);
+  });
+
+  if (!lrItem) return null;
+
+  const detailCandidates = [
+    getNestedValue(lrItem, "system.levels"),
+    getNestedValue(lrItem, "system.amount"),
+    getNestedValue(lrItem, "system.value"),
+    getNestedValue(lrItem, "system.bonus"),
+    getNestedValue(lrItem, "system.effect"),
+    getNestedValue(lrItem, "system.summary"),
+    getNestedValue(lrItem, "system.description"),
+    getNestedValue(lrItem, "system.description.value"),
+    getNestedValue(lrItem, "system.notes")
+  ];
+
+  const detail = detailCandidates
+    .map(value => {
+      if (value == null) return "";
+      if (typeof value === "number") return `${value}`;
+      if (typeof value === "string") return stripHtml(value);
+      if (typeof value === "object") return stripHtml(value.value ?? value.label ?? value.name ?? "");
+      return "";
+    })
+    .find(Boolean);
+
+  const tooltip = detail
+    ? `${lrItem.name}: ${detail}`
+    : `${lrItem.name}${lrItem.type ? ` (${lrItem.type})` : ""}`;
+
+  return {
+    shortLabel: "LR",
+    tooltip
+  };
 }
 
 function getEntangleAttackOptions(actor) {
@@ -187,6 +302,136 @@ function getTrackedPipCharacteristics() {
   return [...new Set(parsed)];
 }
 
+function normalizeCharacteristicKey(key) {
+  return String(key ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, "");
+}
+
+function getCombatValueCharacteristics() {
+  const raw = game.settings.get("hero-combat-engine", "combatValueCharacteristics") ?? "";
+  if (!raw.trim()) {
+    return ["ocv", "dcv", "mcv"];
+  }
+
+  const parsed = raw
+    .split(",")
+    .map(normalizeCharacteristicKey)
+    .filter(Boolean);
+
+  const unique = [...new Set(parsed)];
+  return unique.length ? unique : ["ocv", "dcv", "mcv"];
+}
+
+function getCharacteristicLabel(statKey) {
+  return String(statKey ?? "").toUpperCase();
+}
+
+function getCharacteristicValue(actor, statKey) {
+  const chars = actor?.system?.characteristics ?? {};
+  if (statKey === "mcv") {
+    return chars.mcv?.value ?? chars.dmcv?.value ?? chars.omcv?.value ?? 0;
+  }
+  return chars?.[statKey]?.value ?? 0;
+}
+
+function getCharacteristicUpdateData(actor, statKey, delta) {
+  if (!delta) return {};
+  if (statKey === "mcv") return getMCVUpdateData(actor, delta);
+
+  const chars = actor.system?.characteristics ?? {};
+  return {
+    [`system.characteristics.${statKey}.value`]: (chars?.[statKey]?.value ?? 0) + delta
+  };
+}
+
+function getCombatValueModsFromEntry(entry) {
+  const statMods = {};
+
+  if (entry?.statMods && typeof entry.statMods === "object") {
+    for (const [key, value] of Object.entries(entry.statMods)) {
+      const statKey = normalizeCharacteristicKey(key);
+      const numeric = Number(value ?? 0);
+      if (!statKey || !Number.isFinite(numeric) || numeric === 0) continue;
+      statMods[statKey] = (statMods[statKey] ?? 0) + numeric;
+    }
+  }
+
+  const legacyMap = {
+    ocv: Number(entry?.ocvMod ?? 0),
+    dcv: Number(entry?.dcvMod ?? 0),
+    mcv: Number(entry?.mcvMod ?? 0)
+  };
+  for (const [statKey, numeric] of Object.entries(legacyMap)) {
+    if (!Number.isFinite(numeric) || numeric === 0) continue;
+    statMods[statKey] = (statMods[statKey] ?? 0) + numeric;
+  }
+
+  return statMods;
+}
+
+function sumCombatValueMods(entries) {
+  const total = {};
+  for (const entry of entries ?? []) {
+    const statMods = getCombatValueModsFromEntry(entry);
+    for (const [statKey, value] of Object.entries(statMods)) {
+      total[statKey] = (total[statKey] ?? 0) + value;
+    }
+  }
+  return total;
+}
+
+function formatCombatValueModParts(statMods, preferredOrder = []) {
+  const keys = Object.keys(statMods ?? {}).filter(k => Number(statMods[k] ?? 0) !== 0);
+  const order = [...preferredOrder.filter(k => keys.includes(k)), ...keys.filter(k => !preferredOrder.includes(k)).sort()];
+  return order.map(statKey => {
+    const delta = Number(statMods[statKey] ?? 0);
+    return `${getCharacteristicLabel(statKey)} ${delta > 0 ? "+" : ""}${delta}`;
+  });
+}
+
+function getRevertDeltaMapForCvMods(activeMods = []) {
+  const total = sumCombatValueMods(activeMods);
+  const revertByStat = {};
+  for (const [statKey, delta] of Object.entries(total)) {
+    revertByStat[statKey] = (revertByStat[statKey] ?? 0) - Number(delta ?? 0);
+  }
+  return revertByStat;
+}
+
+function getRevertDeltaMapForAdjustments(adjustments = []) {
+  const total = {};
+  for (const adj of adjustments) {
+    const statKey = normalizeAdjustmentCharKey(adj.charKey ?? adj.char);
+    const applied = Number(adj.appliedDelta ?? 0);
+    if (!statKey || !applied) continue;
+    total[statKey] = (total[statKey] ?? 0) - applied;
+  }
+  return total;
+}
+
+function getRevertUpdatesForBonusFlags(actor, tokenDocument) {
+  const updates = {};
+
+  const cover = Number(tokenDocument?.getFlag("hero-combat-engine", "coverDCV") ?? 0);
+  if (cover) {
+    updates["system.characteristics.dcv.value"] = (actor.system?.characteristics?.dcv?.value ?? 0) - cover;
+  }
+
+  const ocvBonus = Number(tokenDocument?.getFlag("hero-combat-engine", "ocvBonus") ?? 0);
+  if (ocvBonus) {
+    updates["system.characteristics.ocv.value"] = (actor.system?.characteristics?.ocv?.value ?? 0) - ocvBonus;
+  }
+
+  const mcvBonus = Number(tokenDocument?.getFlag("hero-combat-engine", "mcvBonus") ?? 0);
+  if (mcvBonus) {
+    Object.assign(updates, getMCVUpdateData(actor, -mcvBonus));
+  }
+
+  return updates;
+}
+
 function pipsArray(label) {
   const n = BUCKET_PIPS[label] ?? 0;
   return Array.from({ length: 5 }, (_, i) => i < n);
@@ -195,6 +440,28 @@ function pipsArray(label) {
 // Returns true for GameMaster, Assistant GM, and Trusted players.
 function isPrivileged() {
   return game.user.isGM || game.user.role >= CONST.USER_ROLES.TRUSTED;
+}
+
+function canDirectlyUpdateScene() {
+  return game.user.isGM;
+}
+
+function emitCombatSocket(type, data = {}) {
+  game.socket.emit("module.hero-combat-engine", { type, userId: game.user.id, ...data });
+}
+
+function createCombatChatMessage(content, phase, segment, extraData = {}) {
+  return ChatMessage.create({
+    ...extraData,
+    speaker: combatEngineSpeaker(phase, segment),
+    content
+  });
+}
+
+function isDisabledControl(element) {
+  return element?.classList?.contains("disabled")
+    || element?.classList?.contains("read-only")
+    || element?.getAttribute?.("aria-disabled") === "true";
 }
 
 export class HeroControllerPanel extends Application {
@@ -214,6 +481,7 @@ export class HeroControllerPanel extends Application {
   }
 
   getData() {
+    const privilegedUser = isPrivileged();
     const settingSize = game.settings.get("hero-combat-engine", "accessibilitySize") ?? "compact";
     const legacyExpanded = game.settings.get("hero-combat-engine", "expandedAccessibility") ?? false;
     const accessibilitySize = ["compact", "medium", "large"].includes(settingSize)
@@ -222,7 +490,8 @@ export class HeroControllerPanel extends Application {
     const accessibilityClass = accessibilitySize === "compact" ? "" : ` a11y-${accessibilitySize}`;
 
     if (!canvas?.scene) return {
-      phase: 1, segment: 1, isGM: isPrivileged(),
+      phase: 1, segment: 1, isGM: privilegedUser,
+      canManageCombat: false,
       accessibilityClass,
       showSpdColumn: false, hideNonActing: false, actingSPDs: [],
       combatants: [], hasCombatants: false, currentActingTokenId: null, hasStaleTokens: false, staleCount: 0, stalePlural: false
@@ -233,6 +502,7 @@ export class HeroControllerPanel extends Application {
     const actingOrder = canvas.scene.getFlag("hero-combat-engine", "hero-combat.actingOrder") ?? [];
     const showSpdColumn = game.settings.get("hero-combat-engine", "showSpdColumn");
     const trackedPipCharacteristics = getTrackedPipCharacteristics();
+    const combatValueCharacteristics = getCombatValueCharacteristics();
     const playerSelfAdvance = game.settings.get("hero-combat-engine", "playerSelfAdvance");
     const hideNonActing = game.settings.get("hero-combat-engine", "hideNonActing");
 
@@ -269,12 +539,6 @@ export class HeroControllerPanel extends Application {
       if (!token || !actor) return null;
 
       const spd = actor.system?.characteristics?.spd?.value ?? 0;
-      const ocv = actor.system?.characteristics?.ocv?.value ?? 0;
-      const dcv = actor.system?.characteristics?.dcv?.value ?? 0;
-      const mcv = actor.system?.characteristics?.mcv?.value
-        ?? actor.system?.characteristics?.dmcv?.value
-        ?? actor.system?.characteristics?.omcv?.value
-        ?? 0;
       const canActThisSegment = (game.heroCombat?.SPD_MAP?.[spd] ?? []).includes(segment);
       const isActing = token.id === currentActingTokenId;
       const hasActed = alreadyActedIds.has(token.id);
@@ -283,16 +547,21 @@ export class HeroControllerPanel extends Application {
         .filter(([id, perm]) => id !== "default" && perm >= CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER)
         .map(([id]) => id);
       const isOwnedByCurrentUser = ownerIds.includes(game.user.id);
-      const allowEndTurn = isActing && (isPrivileged() || playerSelfAdvance || isOwnedByCurrentUser);
-      const allowRemove = isPrivileged() || isOwnedByCurrentUser;
-      const canSeeStats = isPrivileged() || isOwnedByCurrentUser;
+      const canControlToken = privilegedUser || isOwnedByCurrentUser;
+      const canSelfAdvanceTurn = privilegedUser || playerSelfAdvance || isOwnedByCurrentUser;
+      const allowEndTurn = isActing && canSelfAdvanceTurn;
+      const allowRemove = canControlToken;
+      const canSeeStats = canControlToken;
       const isHeld    = heldTokenIds.has(token.id);
       const isAborted = abortedTokenIds.has(token.id);
-      // allowHold: can act this segment, not already held, not yet done — includes the currently acting token
-      const allowHold    = canActThisSegment && !hasActed && !isHeld && (isPrivileged() || isOwnedByCurrentUser);
-      // allowRelease: token is held and it is not too late (segment still active)
-      const allowRelease = isHeld && (isPrivileged() || isOwnedByCurrentUser);
-      const allowAbort = canActThisSegment && !hasActed && !isActing && (isPrivileged() || isOwnedByCurrentUser);
+      const showHold = canActThisSegment && !hasActed && !isHeld;
+      const allowHold = showHold && canControlToken;
+      const showRelease = isHeld;
+      const allowRelease = showRelease && canControlToken;
+      const showAbort = canActThisSegment && !hasActed && !isActing;
+      const allowAbort = showAbort && canControlToken;
+      const showEndTurn = isActing;
+      const canManageTurnEffects = canControlToken;
       const statBars = trackedPipCharacteristics.map(charKey => {
         const c = actor.system?.characteristics?.[charKey];
         if (!c || (c.value == null && c.max == null)) return null;
@@ -338,25 +607,28 @@ export class HeroControllerPanel extends Application {
 
       const coverDCV = token.document.getFlag("hero-combat-engine", "coverDCV") ?? 0;
       const coverStage = getCoverStage(coverDCV);
-      const cvMods = (token.document.getFlag("hero-combat-engine", "cvSegmentMods") ?? []).reduce((acc, mod) => {
-        acc.ocv += mod.ocvMod ?? 0;
-        acc.dcv += mod.dcvMod ?? 0;
-        acc.mcv += mod.mcvMod ?? 0;
-        return acc;
-      }, { ocv: 0, dcv: 0, mcv: 0 });
+      const ocvBonus = token.document.getFlag("hero-combat-engine", "ocvBonus") ?? 0;
+      const ocvStage = getOcvStage(ocvBonus);
+      const mcvBonus = token.document.getFlag("hero-combat-engine", "mcvBonus") ?? 0;
+      const mcvStage = getMcvStage(mcvBonus);
+      const cvMods = sumCombatValueMods(token.document.getFlag("hero-combat-engine", "cvSegmentMods") ?? []);
+      const lightningReflexes = getLightningReflexesIndicator(actor);
+      const combatValueRows = combatValueCharacteristics.map(statKey => {
+        const tempDelta = Number(cvMods[statKey] ?? 0);
+        return {
+          key: statKey,
+          label: getCharacteristicLabel(statKey),
+          value: getCharacteristicValue(actor, statKey),
+          tempClass: tempDelta > 0 ? "temp-buff" : (tempDelta < 0 ? "temp-debuff" : "")
+        };
+      });
 
       return {
         id: token.id,
         name: token.name,
         img: token.document.texture?.src || actor.img || "icons/svg/mystery-man.svg",
         spd,
-        ocv, dcv, mcv,
-        ocvTempActive: cvMods.ocv !== 0,
-        dcvTempActive: cvMods.dcv !== 0,
-        mcvTempActive: cvMods.mcv !== 0,
-        ocvTempClass: cvMods.ocv > 0 ? "temp-buff" : (cvMods.ocv < 0 ? "temp-debuff" : ""),
-        dcvTempClass: cvMods.dcv > 0 ? "temp-buff" : (cvMods.dcv < 0 ? "temp-debuff" : ""),
-        mcvTempClass: cvMods.mcv > 0 ? "temp-buff" : (cvMods.mcv < 0 ? "temp-debuff" : ""),
+        combatValueRows,
         statBars,
         canSeeStats,
         effects,
@@ -366,15 +638,19 @@ export class HeroControllerPanel extends Application {
             ...a,
             fadeInterval,
             fadeUnitLabel: fadeInterval === "segment" ? "Segment" : "Phase",
-            isDrain: a.type === "drain"
+            isDrain: a.type === "drain",
+            canManage: canManageTurnEffects
           };
         }),
-        isGM: isPrivileged(),
+        isGM: privilegedUser,
         isActing, isHeld, isAborted,
+        showHold, showRelease, showAbort, showEndTurn,
         allowEndTurn, allowRemove, allowHold, allowRelease, allowAbort,
+        canManageTurnEffects,
         canActThisSegment,
         stateClass,
         statusText,
+        lightningReflexes,
         quickStatuses: (() => {
           const activeIDs = actor.statuses ?? new Set(actor.effects.flatMap(e => [...(e.statuses ?? [])]));
           const cfgMap = Object.fromEntries((CONFIG.statusEffects ?? []).map(s => [s.id, s.icon]));
@@ -385,6 +661,7 @@ export class HeroControllerPanel extends Application {
               label: s.label,
               icon: cfgMap[s.id] ?? s.fallbackIcon,
               active,
+              showInTracker: s.id !== "prone" || active,
               canToggle: isPrivileged() || isOwnedByCurrentUser
             };
             if (active) {
@@ -396,8 +673,15 @@ export class HeroControllerPanel extends Application {
         })(),
         coverDCV,
         coverStageLabel: coverStage.label,
+        ocvBonus,
+        ocvStageLabel: ocvStage.label,
+        mcvBonus,
+        mcvStageLabel: mcvStage.label,
         entangleBody: token.document.getFlag("hero-combat-engine", "entangleBody") ?? 0,
-        canToggleCover: isPrivileged() || isOwnedByCurrentUser
+        canToggleCover: canControlToken,
+        canToggleOcvBonus: canControlToken,
+        canToggleMcvBonus: canControlToken,
+        canManageCv: canControlToken
       };
     }).filter(Boolean);
     const combatants = allCombatants.filter(c => !hideNonActing || c.canActThisSegment);
@@ -405,7 +689,8 @@ export class HeroControllerPanel extends Application {
     return {
       phase,
       segment,
-      isGM: isPrivileged(),
+      isGM: privilegedUser,
+      canManageCombat: privilegedUser,
       accessibilityClass,
       showSpdColumn,
       hideNonActing,
@@ -427,15 +712,16 @@ export class HeroControllerPanel extends Application {
     });
 
     html.find(".hero-end-segment").click(async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
       e.preventDefault();
       const tokenId = e.currentTarget.dataset.tokenId;
       try {
-        if (isPrivileged()) {
+        if (canDirectlyUpdateScene()) {
           if (game.heroCombat?.endTokenSegment) {
             await game.heroCombat.endTokenSegment(tokenId);
           }
         } else {
-          game.socket.emit("module.hero-combat-engine", { type: "end-turn", tokenId, userId: game.user.id });
+          emitCombatSocket("end-turn", { tokenId });
         }
         await this.render(true);
       } catch (err) {
@@ -444,45 +730,75 @@ export class HeroControllerPanel extends Application {
     });
 
     html.find("#hero-prev-segment").click(async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
       e.preventDefault();
       try {
-        if (game.heroCombat?.previousSegment) await game.heroCombat.previousSegment();
+        if (canDirectlyUpdateScene()) {
+          if (game.heroCombat?.previousSegment) await game.heroCombat.previousSegment();
+        } else {
+          emitCombatSocket("previous-segment");
+        }
       } catch (err) {
         console.error("[HERO ERROR] previousSegment failed:", err);
       }
     });
 
     html.find("#hero-next-segment").click(async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
       e.preventDefault();
       try {
-        if (game.heroCombat?.segmentAdvance) await game.heroCombat.segmentAdvance();
+        if (canDirectlyUpdateScene()) {
+          if (game.heroCombat?.segmentAdvance) await game.heroCombat.segmentAdvance();
+        } else {
+          emitCombatSocket("next-segment");
+        }
       } catch (err) {
         console.error("[HERO ERROR] segmentAdvance failed:", err);
       }
     });
 
     html.find("#hero-prev-token").click(async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
       e.preventDefault();
       try {
-        if (game.heroCombat?.previousActingToken) await game.heroCombat.previousActingToken();
+        if (canDirectlyUpdateScene()) {
+          if (game.heroCombat?.previousActingToken) await game.heroCombat.previousActingToken();
+        } else {
+          emitCombatSocket("previous-token");
+        }
       } catch (err) {
         console.error("[HERO ERROR] previousActingToken failed:", err);
       }
     });
 
     html.find("#hero-next-token").click(async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
       e.preventDefault();
       try {
-        if (game.heroCombat?.nextActingToken) await game.heroCombat.nextActingToken();
+        if (canDirectlyUpdateScene()) {
+          if (game.heroCombat?.nextActingToken) await game.heroCombat.nextActingToken();
+        } else {
+          emitCombatSocket("next-token");
+        }
       } catch (err) {
         console.error("[HERO ERROR] nextActingToken failed:", err);
       }
     });
 
     html.find("#hero-begin-combat").click(async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
       e.preventDefault();
       try {
-        if (game.heroCombat?.beginCombat) await game.heroCombat.beginCombat();
+        if (canDirectlyUpdateScene()) {
+          if (game.heroCombat?.beginCombat) await game.heroCombat.beginCombat();
+        } else {
+          const tokenIds = canvas.tokens.controlled.map(token => token.id);
+          if (!tokenIds.length) {
+            ui.notifications.warn("Select at least one token to begin combat.");
+            return;
+          }
+          emitCombatSocket("begin-combat", { tokenIds });
+        }
         await this.render(true);
       } catch (err) {
         console.error("[HERO ERROR] beginCombat failed:", err);
@@ -490,9 +806,19 @@ export class HeroControllerPanel extends Application {
     });
 
     html.find("#hero-add-selected").click(async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
       e.preventDefault();
       try {
-        if (game.heroCombat?.addSelectedTokens) await game.heroCombat.addSelectedTokens();
+        if (canDirectlyUpdateScene()) {
+          if (game.heroCombat?.addSelectedTokens) await game.heroCombat.addSelectedTokens();
+        } else {
+          const tokenIds = canvas.tokens.controlled.map(token => token.id);
+          if (!tokenIds.length) {
+            ui.notifications.warn("Select at least one token to add to combat.");
+            return;
+          }
+          emitCombatSocket("add-selected", { tokenIds });
+        }
         await this.render(true);
       } catch (err) {
         console.error("[HERO ERROR] addSelectedTokens failed:", err);
@@ -500,6 +826,7 @@ export class HeroControllerPanel extends Application {
     });
 
     html.find("#hero-remove-selected").click(async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
       e.preventDefault();
       const selected = canvas.tokens.controlled;
       if (!selected.length) {
@@ -511,16 +838,25 @@ export class HeroControllerPanel extends Application {
         content: `<p>Remove ${selected.length} selected token${selected.length !== 1 ? "s" : ""} from the combat order?</p>`
       });
       if (!confirmed) return;
-      for (const token of selected) {
-        await this._removeToken(token.id);
+      if (canDirectlyUpdateScene()) {
+        for (const token of selected) {
+          await this._removeToken(token.id);
+        }
+      } else {
+        emitCombatSocket("remove-combatants", { tokenIds: selected.map(token => token.id) });
       }
       await this.render(true);
     });
 
     html.find("#hero-highlight").click(async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
       e.preventDefault();
       try {
-        if (game.heroCombat?.highlightActing) await game.heroCombat.highlightActing({ temporaryOnly: true });
+        if (canDirectlyUpdateScene()) {
+          if (game.heroCombat?.highlightActing) await game.heroCombat.highlightActing();
+        } else {
+          emitCombatSocket("highlight-acting");
+        }
       } catch (err) {
         console.error("[HERO ERROR] highlightActing failed:", err);
       }
@@ -534,9 +870,14 @@ export class HeroControllerPanel extends Application {
     });
 
     html.find("#hero-end-combat").click(async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
       e.preventDefault();
       try {
-        if (game.heroCombat?.endCombat) await game.heroCombat.endCombat();
+        if (canDirectlyUpdateScene()) {
+          if (game.heroCombat?.endCombat) await game.heroCombat.endCombat();
+        } else {
+          emitCombatSocket("end-combat");
+        }
         await this.render(true);
       } catch (err) {
         console.error("[HERO ERROR] endCombat failed:", err);
@@ -560,6 +901,7 @@ export class HeroControllerPanel extends Application {
     });
 
     html.find(".hero-remove-combatant").click(async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
       e.preventDefault();
       const tokenId = e.currentTarget.dataset.tokenId;
       const confirmed = await Dialog.confirm({
@@ -567,63 +909,73 @@ export class HeroControllerPanel extends Application {
         content: `<p>Remove this token from the combat order?</p>`
       });
       if (!confirmed) return;
-      if (isPrivileged()) {
+      if (canDirectlyUpdateScene()) {
         await this._removeToken(tokenId);
       } else {
-        game.socket.emit("module.hero-combat-engine", { type: "remove-combatant", tokenId, userId: game.user.id });
+        emitCombatSocket("remove-combatant", { tokenId });
       }
     });
 
     html.find(".hero-take-recovery").click(async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
       e.preventDefault();
       const tokenId = e.currentTarget.dataset.tokenId;
-      if (isPrivileged()) {
+      if (canDirectlyUpdateScene()) {
         await this._applyRecovery(tokenId);
       } else {
-        game.socket.emit("module.hero-combat-engine", { type: "take-recovery", tokenId, userId: game.user.id });
+        emitCombatSocket("take-recovery", { tokenId });
       }
     });
 
     html.find("#hero-refresh-order").click(async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
       e.preventDefault();
       try {
-        if (game.heroCombat?.refreshCombatOrder) await game.heroCombat.refreshCombatOrder();
+        if (canDirectlyUpdateScene()) {
+          if (game.heroCombat?.refreshCombatOrder) await game.heroCombat.refreshCombatOrder();
+        } else {
+          emitCombatSocket("refresh-order");
+        }
       } catch (err) {
         console.error("[HERO ERROR] refreshCombatOrder failed:", err);
       }
     });
 
     html.find(".hero-hold-token").click(async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
       e.preventDefault();
       const tokenId = e.currentTarget.dataset.tokenId;
-      if (isPrivileged()) {
+      if (canDirectlyUpdateScene()) {
         await game.heroCombat.holdToken(tokenId);
       } else {
-        game.socket.emit("module.hero-combat-engine", { type: "hold-token", tokenId, userId: game.user.id });
+        emitCombatSocket("hold-token", { tokenId });
       }
     });
 
     html.find(".hero-release-hold").click(async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
       e.preventDefault();
       const tokenId = e.currentTarget.dataset.tokenId;
-      if (isPrivileged()) {
+      if (canDirectlyUpdateScene()) {
         await game.heroCombat.releaseHold(tokenId);
       } else {
-        game.socket.emit("module.hero-combat-engine", { type: "release-hold", tokenId, userId: game.user.id });
+        emitCombatSocket("release-hold", { tokenId });
       }
     });
 
     html.find(".hero-abort-token").click(async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
       e.preventDefault();
       const tokenId = e.currentTarget.dataset.tokenId;
-      if (isPrivileged()) {
+      if (canDirectlyUpdateScene()) {
         await this._toggleAbort(tokenId);
       } else {
-        game.socket.emit("module.hero-combat-engine", { type: "toggle-abort", tokenId, userId: game.user.id });
+        emitCombatSocket("toggle-abort", { tokenId });
       }
     });
 
     html.find(".hero-status-btn.active").on("contextmenu", async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
       e.preventDefault();
       const tokenId  = e.currentTarget.dataset.tokenId;
       const statusId = e.currentTarget.dataset.statusId;
@@ -631,6 +983,7 @@ export class HeroControllerPanel extends Application {
     });
 
     html.find(".hero-adjustment-badge").on("contextmenu", async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
       e.preventDefault();
       const tokenId = e.currentTarget.dataset.tokenId;
       const adjId   = e.currentTarget.dataset.adjId;
@@ -638,12 +991,14 @@ export class HeroControllerPanel extends Application {
     });
 
     html.find(".hero-add-adjustment").click(async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
       e.preventDefault();
       const tokenId = e.currentTarget.dataset.tokenId;
       await this._openAddAdjustmentDialog(tokenId);
     });
 
     html.find(".hero-entangle-badge").on("contextmenu", async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
       e.preventDefault();
       const tokenId = e.currentTarget.dataset.tokenId;
       const token = canvas.tokens.get(tokenId);
@@ -654,13 +1009,15 @@ export class HeroControllerPanel extends Application {
     // of any jQuery-layer interception that was swallowing it previously.
     html.find(".hero-cv-stack").each((_, el) => {
       el.addEventListener("contextmenu", async (e) => {
+        if (isDisabledControl(el)) return;
         e.preventDefault();
         e.stopPropagation();
         await this._openCvAdjustmentDialog(el.dataset.tokenId);
       });
     });
 
-    html.find(".hero-cover-btn").click(async (e) => {
+    html.find(".hero-cover-btn:not(.hero-ocv-btn):not(.hero-mcv-btn)").click(async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
       e.preventDefault();
       const tokenId = e.currentTarget.dataset.tokenId;
       const token = canvas.tokens.get(tokenId);
@@ -681,13 +1038,66 @@ export class HeroControllerPanel extends Application {
 
       const phase   = canvas.scene.getFlag("hero-combat-engine", "heroPhase")   ?? 1;
       const segment = canvas.scene.getFlag("hero-combat-engine", "heroSegment") ?? 1;
-      ChatMessage.create({ speaker: { alias: "Combat Engine" },
-        content: `<strong>Segment ${phase}.${segment}</strong><br><strong>${token.name}</strong> cover: ${nextStage.label}${nextStage.dcv > 0 ? ` (+${nextStage.dcv} DCV)` : ""}.` });
+      createCombatChatMessage(`<strong>${token.name}</strong> cover: ${nextStage.label}${nextStage.dcv > 0 ? ` (+${nextStage.dcv} DCV)` : ""}.`, phase, segment);
 
       await this.render(true);
     });
 
-    html.find(".hero-cover-btn").on("contextmenu", async (e) => {
+    html.find(".hero-ocv-btn").click(async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
+      e.preventDefault();
+      const tokenId = e.currentTarget.dataset.tokenId;
+      const token = canvas.tokens.get(tokenId);
+      if (!token?.actor) return;
+      if (!isPrivileged() && !token.actor.isOwner) return;
+      const current = token.document.getFlag("hero-combat-engine", "ocvBonus") ?? 0;
+      const currentIdx = OCV_STAGES.findIndex(s => s.ocv === current);
+      const nextStage = OCV_STAGES[(currentIdx + 1) % OCV_STAGES.length];
+      const actorOcv = token.actor.system?.characteristics?.ocv?.value ?? 0;
+
+      await token.actor.update({ "system.characteristics.ocv.value": actorOcv - current + nextStage.ocv });
+
+      if (nextStage.ocv === 0) {
+        await token.document.unsetFlag("hero-combat-engine", "ocvBonus");
+      } else {
+        await token.document.setFlag("hero-combat-engine", "ocvBonus", nextStage.ocv);
+      }
+
+      const phase   = canvas.scene.getFlag("hero-combat-engine", "heroPhase")   ?? 1;
+      const segment = canvas.scene.getFlag("hero-combat-engine", "heroSegment") ?? 1;
+      createCombatChatMessage(`<strong>${token.name}</strong> OCV bonus: ${nextStage.label}${nextStage.ocv > 0 ? ` (+${nextStage.ocv} OCV)` : ""}.`, phase, segment);
+
+      await this.render(true);
+    });
+
+    html.find(".hero-mcv-btn").click(async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
+      e.preventDefault();
+      const tokenId = e.currentTarget.dataset.tokenId;
+      const token = canvas.tokens.get(tokenId);
+      if (!token?.actor) return;
+      if (!isPrivileged() && !token.actor.isOwner) return;
+      const current = token.document.getFlag("hero-combat-engine", "mcvBonus") ?? 0;
+      const currentIdx = MCV_STAGES.findIndex(s => s.mcv === current);
+      const nextStage = MCV_STAGES[(currentIdx + 1) % MCV_STAGES.length];
+
+      await token.actor.update(getMCVUpdateData(token.actor, nextStage.mcv - current));
+
+      if (nextStage.mcv === 0) {
+        await token.document.unsetFlag("hero-combat-engine", "mcvBonus");
+      } else {
+        await token.document.setFlag("hero-combat-engine", "mcvBonus", nextStage.mcv);
+      }
+
+      const phase   = canvas.scene.getFlag("hero-combat-engine", "heroPhase")   ?? 1;
+      const segment = canvas.scene.getFlag("hero-combat-engine", "heroSegment") ?? 1;
+      createCombatChatMessage(`<strong>${token.name}</strong> MCV bonus: ${nextStage.label}${nextStage.mcv > 0 ? ` (+${nextStage.mcv} MCV)` : ""}.`, phase, segment);
+
+      await this.render(true);
+    });
+
+    html.find(".hero-cover-btn:not(.hero-ocv-btn):not(.hero-mcv-btn)").on("contextmenu", async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
       e.preventDefault();
       const tokenId = e.currentTarget.dataset.tokenId;
       const token = canvas.tokens.get(tokenId);
@@ -696,7 +1106,28 @@ export class HeroControllerPanel extends Application {
       await this._openCoverDialog(tokenId);
     });
 
+    html.find(".hero-ocv-btn").on("contextmenu", async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
+      e.preventDefault();
+      const tokenId = e.currentTarget.dataset.tokenId;
+      const token = canvas.tokens.get(tokenId);
+      if (!token?.actor) return;
+      if (!isPrivileged() && !token.actor.isOwner) return;
+      await this._openOcvBonusDialog(tokenId);
+    });
+
+    html.find(".hero-mcv-btn").on("contextmenu", async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
+      e.preventDefault();
+      const tokenId = e.currentTarget.dataset.tokenId;
+      const token = canvas.tokens.get(tokenId);
+      if (!token?.actor) return;
+      if (!isPrivileged() && !token.actor.isOwner) return;
+      await this._openMcvBonusDialog(tokenId);
+    });
+
     html.find(".hero-status-btn").click(async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
       e.preventDefault();
       const tokenId  = e.currentTarget.dataset.tokenId;
       const statusId = e.currentTarget.dataset.statusId;
@@ -854,8 +1285,7 @@ export class HeroControllerPanel extends Application {
       if (result.action === "update") {
         if (result.fp <= 0) {
           await token.document.unsetFlag("hero-combat-engine", flagKey);
-          ChatMessage.create({ speaker: { alias: "Combat Engine" },
-            content: `<strong>Segment ${phase}.${segment}</strong><br><strong>${token.name}</strong> Flash (${senseName}) cleared manually.` });
+          createCombatChatMessage(`<strong>${token.name}</strong> Flash (${senseName}) cleared manually.`, phase, segment);
           // Remove the status effect
           const effectData = CONFIG.statusEffects?.find(e => e.id === statusId);
           if (effectData) {
@@ -865,8 +1295,7 @@ export class HeroControllerPanel extends Application {
         } else {
           const fd = actor.system?.characteristics?.fd?.value ?? 0;
           await token.document.setFlag("hero-combat-engine", flagKey, result.fp);
-          ChatMessage.create({ speaker: { alias: "Combat Engine" },
-            content: `<strong>Segment ${phase}.${segment}</strong><br><strong>${token.name}</strong> Flash (${senseName}): ${result.fp} FP remaining (FD ${fd}, recovers 1/segment).` });
+          createCombatChatMessage(`<strong>${token.name}</strong> Flash (${senseName}): ${result.fp} FP remaining (FD ${fd}, recovers 1/segment).`, phase, segment);
         }
       } else if (result.action === "remove") {
         await token.document.unsetFlag("hero-combat-engine", flagKey);
@@ -875,8 +1304,7 @@ export class HeroControllerPanel extends Application {
           if (typeof actor.toggleStatusEffect === "function") await actor.toggleStatusEffect(statusId);
           else await token.toggleEffect(effectData);
         }
-        ChatMessage.create({ speaker: { alias: "Combat Engine" },
-          content: `<strong>Segment ${phase}.${segment}</strong><br><strong>${token.name}</strong> Flash (${senseName}) removed.` });
+        createCombatChatMessage(`<strong>${token.name}</strong> Flash (${senseName}) removed.`, phase, segment);
       }
 
       await this.render(true);
@@ -901,8 +1329,7 @@ export class HeroControllerPanel extends Application {
         if (typeof actor.toggleStatusEffect === "function") await actor.toggleStatusEffect("stun");
         else await token.toggleEffect(effectData);
       }
-      ChatMessage.create({ speaker: { alias: "Combat Engine" },
-        content: `<strong>Segment ${phase}.${segment}</strong><br><strong>${token.name}</strong> recovers from Stun.` });
+      createCombatChatMessage(`<strong>${token.name}</strong> recovers from Stun.`, phase, segment);
       await this.render(true);
       return;
     }
@@ -919,8 +1346,7 @@ export class HeroControllerPanel extends Application {
       if (typeof actor.toggleStatusEffect === "function") await actor.toggleStatusEffect(statusId);
       else await token.toggleEffect(effectData);
     }
-    ChatMessage.create({ speaker: { alias: "Combat Engine" },
-      content: `<strong>Segment ${phase}.${segment}</strong><br><strong>${token.name}</strong>: ${statusMeta?.label?.split("—")[0]?.trim() ?? statusId} removed.` });
+    createCombatChatMessage(`<strong>${token.name}</strong>: ${statusMeta?.label?.split("—")[0]?.trim() ?? statusId} removed.`, phase, segment);
     await this.render(true);
   }
 
@@ -941,9 +1367,9 @@ export class HeroControllerPanel extends Application {
               <label style="min-width:100px;flex-shrink:0;">DCV bonus:</label>
               <select id="cover-dcv" style="flex:1;">
                 <option value="0"${current === 0 ? " selected" : ""}>None (+0 DCV)</option>
-                <option value="1"${current === 1 ? " selected" : ""}>Some (+1 DCV)</option>
-                <option value="2"${current === 2 ? " selected" : ""}>Half (+2 DCV)</option>
-                <option value="3"${current === 3 ? " selected" : ""}>Good (+3 DCV)</option>
+                <option value="1"${current === 1 ? " selected" : ""}>Low (+1 DCV)</option>
+                <option value="2"${current === 2 ? " selected" : ""}>Medium (+2 DCV)</option>
+                <option value="3"${current === 3 ? " selected" : ""}>High (+3 DCV)</option>
               </select>
             </div>
           </div>
@@ -974,8 +1400,114 @@ export class HeroControllerPanel extends Application {
         await token.document.setFlag("hero-combat-engine", "coverDCV", result.dcv);
       }
       const stage = getCoverStage(result.dcv);
-      ChatMessage.create({ speaker: { alias: "Combat Engine" },
-        content: `<strong>Segment ${phase}.${segment}</strong><br><strong>${token.name}</strong> cover: ${stage.label}${stage.dcv > 0 ? ` (+${stage.dcv} DCV)` : ""}.` });
+      createCombatChatMessage(`<strong>${token.name}</strong> cover: ${stage.label}${stage.dcv > 0 ? ` (+${stage.dcv} DCV)` : ""}.`, phase, segment);
+    }
+
+    await this.render(true);
+  }
+
+  async _openOcvBonusDialog(tokenId) {
+    const token = canvas.tokens.get(tokenId);
+    if (!token?.actor) return;
+    const current = token.document.getFlag("hero-combat-engine", "ocvBonus") ?? 0;
+    const phase   = canvas.scene.getFlag("hero-combat-engine", "heroPhase")   ?? 1;
+    const segment = canvas.scene.getFlag("hero-combat-engine", "heroSegment") ?? 1;
+
+    const result = await new Promise(resolve => {
+      new Dialog({
+        title: `OCV Bonus — ${token.name}`,
+        content: `
+          <div style="display:grid;gap:8px;margin-top:4px;">
+            <p style="margin:0;font-size:0.85em;color:var(--color-text-dark-secondary);">Select the temporary OCV bonus.</p>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <label style="min-width:100px;flex-shrink:0;">OCV bonus:</label>
+              <select id="ocv-bonus" style="flex:1;">
+                <option value="0"${current === 0 ? " selected" : ""}>None (+0 OCV)</option>
+                <option value="1"${current === 1 ? " selected" : ""}>Low (+1 OCV)</option>
+                <option value="2"${current === 2 ? " selected" : ""}>Medium (+2 OCV)</option>
+                <option value="3"${current === 3 ? " selected" : ""}>High (+3 OCV)</option>
+              </select>
+            </div>
+          </div>
+        `,
+        buttons: {
+          apply: {
+            icon: '<i class="fas fa-crosshairs"></i>',
+            label: current > 0 ? "Update" : "Apply",
+            callback: html => resolve({ action: "apply", ocv: parseInt(html.find("#ocv-bonus").val()) })
+          },
+          cancel: { label: "Cancel", callback: () => resolve(null) }
+        },
+        default: "apply"
+      }).render(true);
+    });
+
+    if (!result) return;
+
+    const actorOcv = token.actor.system?.characteristics?.ocv?.value ?? 0;
+
+    if (result.action === "apply") {
+      const adjustedOcv = actorOcv - current + result.ocv;
+      await token.actor.update({ "system.characteristics.ocv.value": adjustedOcv });
+      if (result.ocv === 0) {
+        await token.document.unsetFlag("hero-combat-engine", "ocvBonus");
+      } else {
+        await token.document.setFlag("hero-combat-engine", "ocvBonus", result.ocv);
+      }
+      const stage = getOcvStage(result.ocv);
+      createCombatChatMessage(`<strong>${token.name}</strong> OCV bonus: ${stage.label}${stage.ocv > 0 ? ` (+${stage.ocv} OCV)` : ""}.`, phase, segment);
+    }
+
+    await this.render(true);
+  }
+
+  async _openMcvBonusDialog(tokenId) {
+    const token = canvas.tokens.get(tokenId);
+    if (!token?.actor) return;
+    const current = token.document.getFlag("hero-combat-engine", "mcvBonus") ?? 0;
+    const phase   = canvas.scene.getFlag("hero-combat-engine", "heroPhase")   ?? 1;
+    const segment = canvas.scene.getFlag("hero-combat-engine", "heroSegment") ?? 1;
+
+    const result = await new Promise(resolve => {
+      new Dialog({
+        title: `MCV Bonus — ${token.name}`,
+        content: `
+          <div style="display:grid;gap:8px;margin-top:4px;">
+            <p style="margin:0;font-size:0.85em;color:var(--color-text-dark-secondary);">Select the temporary MCV bonus.</p>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <label style="min-width:100px;flex-shrink:0;">MCV bonus:</label>
+              <select id="mcv-bonus" style="flex:1;">
+                <option value="0"${current === 0 ? " selected" : ""}>None (+0 MCV)</option>
+                <option value="1"${current === 1 ? " selected" : ""}>Low (+1 MCV)</option>
+                <option value="2"${current === 2 ? " selected" : ""}>Medium (+2 MCV)</option>
+                <option value="3"${current === 3 ? " selected" : ""}>High (+3 MCV)</option>
+              </select>
+            </div>
+          </div>
+        `,
+        buttons: {
+          apply: {
+            icon: '<i class="fas fa-brain"></i>',
+            label: current > 0 ? "Update" : "Apply",
+            callback: html => resolve({ action: "apply", mcv: parseInt(html.find("#mcv-bonus").val()) })
+          },
+          cancel: { label: "Cancel", callback: () => resolve(null) }
+        },
+        default: "apply"
+      }).render(true);
+    });
+
+    if (!result) return;
+
+    if (result.action === "apply") {
+      await token.actor.update(getMCVUpdateData(token.actor, result.mcv - current));
+      if (result.mcv === 0) {
+        await token.document.unsetFlag("hero-combat-engine", "mcvBonus");
+      } else {
+        await token.document.setFlag("hero-combat-engine", "mcvBonus", result.mcv);
+      }
+      const stage = getMcvStage(result.mcv);
+      createCombatChatMessage(`<strong>${token.name}</strong> MCV bonus: ${stage.label}${stage.mcv > 0 ? ` (+${stage.mcv} MCV)` : ""}.`, phase, segment);
     }
 
     await this.render(true);
@@ -983,7 +1515,8 @@ export class HeroControllerPanel extends Application {
 
   async _openAddAdjustmentDialog(tokenId) {
     const token = canvas.tokens.get(tokenId);
-    if (!token || !isPrivileged()) return;
+    if (!token?.actor) return;
+    if (!isPrivileged() && !token.actor.isOwner) return;
 
     const CHARS = ["STR","DEX","CON","INT","EGO","PRE","BODY","STUN","END","REC","SPD","PD","ED","OCV","DCV","OMCV","DMCV"];
     const charOptions = CHARS.map(c => `<option value="${c}">${c}</option>`).join("");
@@ -1038,14 +1571,25 @@ export class HeroControllerPanel extends Application {
 
     if (!result) return;
 
+    const statKey = normalizeAdjustmentCharKey(result.char);
+    const baseValue = getAdjustmentBaseCharacteristicValue(token.actor, statKey);
+    const appliedDelta = getAdjustmentTargetDelta(baseValue, result.points, result.type);
+
+    if (appliedDelta !== 0) {
+      await token.actor.update(getAdjustmentUpdateData(token.actor, statKey, appliedDelta));
+    }
+
     const existing = token.document.getFlag("hero-combat-engine", "adjustments") ?? [];
     const newEntry = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       type:     result.type,
       char:     result.char,
+      charKey:  statKey,
       points:   result.points,
       fadeRate: result.fadeRate,
-      fadeInterval: result.fadeInterval
+      fadeInterval: result.fadeInterval,
+      baseValue,
+      appliedDelta
     };
     await token.document.setFlag("hero-combat-engine", "adjustments", [...existing, newEntry]);
 
@@ -1053,17 +1597,15 @@ export class HeroControllerPanel extends Application {
     const segment = canvas.scene.getFlag("hero-combat-engine", "heroSegment") ?? 1;
     const typeLabel = result.type === "drain" ? "Drain" : "Aid";
     const fadeUnitLabel = result.fadeInterval === "segment" ? "Segment" : "Phase";
-    ChatMessage.create({
-      speaker: { alias: "Combat Engine" },
-      content: `<strong>Segment ${phase}.${segment}</strong><br><strong>${token.name}</strong>: ${typeLabel} ${result.char} ${result.points} pts applied (fades ${result.fadeRate}/${fadeUnitLabel}).`
-    });
+    createCombatChatMessage(`<strong>${token.name}</strong>: ${typeLabel} ${result.char} ${result.points} pts applied (fades ${result.fadeRate}/${fadeUnitLabel}).`, phase, segment);
 
     await this.render(true);
   }
 
   async _openAdjustmentDialog(tokenId, adjId) {
     const token = canvas.tokens.get(tokenId);
-    if (!token || !isPrivileged()) return;
+    if (!token?.actor) return;
+    if (!isPrivileged() && !token.actor.isOwner) return;
 
     const adjustments = token.document.getFlag("hero-combat-engine", "adjustments") ?? [];
     const adj = adjustments.find(a => a.id === adjId);
@@ -1124,35 +1666,46 @@ export class HeroControllerPanel extends Application {
 
     if (result.action === "update") {
       if (result.points <= 0) {
+        if (adj.appliedDelta) {
+          const statKey = normalizeAdjustmentCharKey(adj.charKey ?? adj.char);
+          await token.actor.update(getAdjustmentUpdateData(token.actor, statKey, -Number(adj.appliedDelta || 0)));
+        }
         const newAdjs = adjustments.filter(a => a.id !== adjId);
         if (newAdjs.length) await token.document.setFlag("hero-combat-engine", "adjustments", newAdjs);
         else await token.document.unsetFlag("hero-combat-engine", "adjustments");
-        ChatMessage.create({
-          speaker: { alias: "Combat Engine" },
-          content: `<strong>Segment ${phase}.${segment}</strong><br><strong>${token.name}</strong>: ${typeLabel} ${adj.char} cleared manually.`
-        });
+        createCombatChatMessage(`<strong>${token.name}</strong>: ${typeLabel} ${adj.char} cleared manually.`, phase, segment);
       } else {
+        const statKey = normalizeAdjustmentCharKey(adj.charKey ?? adj.char);
+        const baseValue = Number(adj.baseValue ?? getAdjustmentBaseCharacteristicValue(token.actor, statKey));
+        const oldApplied = Number(adj.appliedDelta ?? 0);
+        const nextApplied = getAdjustmentTargetDelta(baseValue, result.points, adj.type);
+        const delta = nextApplied - oldApplied;
+        if (delta !== 0) {
+          await token.actor.update(getAdjustmentUpdateData(token.actor, statKey, delta));
+        }
+
         const newAdjs = adjustments.map(a => a.id === adjId ? {
           ...a,
           points: result.points,
           fadeRate: result.fadeRate,
-          fadeInterval: result.fadeInterval
+          fadeInterval: result.fadeInterval,
+          charKey: statKey,
+          baseValue,
+          appliedDelta: nextApplied
         } : a);
         await token.document.setFlag("hero-combat-engine", "adjustments", newAdjs);
         const fadeUnitLabel = result.fadeInterval === "segment" ? "Segment" : "Phase";
-        ChatMessage.create({
-          speaker: { alias: "Combat Engine" },
-          content: `<strong>Segment ${phase}.${segment}</strong><br><strong>${token.name}</strong>: ${typeLabel} ${adj.char} updated — ${result.points} pts remaining (fades ${result.fadeRate}/${fadeUnitLabel}).`
-        });
+        createCombatChatMessage(`<strong>${token.name}</strong>: ${typeLabel} ${adj.char} updated — ${result.points} pts remaining (fades ${result.fadeRate}/${fadeUnitLabel}).`, phase, segment);
       }
     } else if (result.action === "remove") {
+      if (adj.appliedDelta) {
+        const statKey = normalizeAdjustmentCharKey(adj.charKey ?? adj.char);
+        await token.actor.update(getAdjustmentUpdateData(token.actor, statKey, -Number(adj.appliedDelta || 0)));
+      }
       const newAdjs = adjustments.filter(a => a.id !== adjId);
       if (newAdjs.length) await token.document.setFlag("hero-combat-engine", "adjustments", newAdjs);
       else await token.document.unsetFlag("hero-combat-engine", "adjustments");
-      ChatMessage.create({
-        speaker: { alias: "Combat Engine" },
-        content: `<strong>Segment ${phase}.${segment}</strong><br><strong>${token.name}</strong>: ${typeLabel} ${adj.char} removed.`
-      });
+      createCombatChatMessage(`<strong>${token.name}</strong>: ${typeLabel} ${adj.char} removed.`, phase, segment);
     }
 
     await this.render(true);
@@ -1228,16 +1781,10 @@ export class HeroControllerPanel extends Application {
           if (typeof actor.toggleStatusEffect === "function") await actor.toggleStatusEffect(clearId);
           else await token.toggleEffect(effectData);
         }
-        ChatMessage.create({
-          speaker: { alias: "Combat Engine" },
-          content: `<strong>Segment ${phase}.${segment}</strong><br><strong>${token.name}</strong> Entangle removed.`
-        });
+        createCombatChatMessage(`<strong>${token.name}</strong> Entangle removed.`, phase, segment);
       } else {
         await token.document.setFlag("hero-combat-engine", "entangleBody", result.body);
-        ChatMessage.create({
-          speaker: { alias: "Combat Engine" },
-          content: `<strong>Segment ${phase}.${segment}</strong><br><strong>${token.name}</strong> Entangle BODY: ${result.body}.`
-        });
+        createCombatChatMessage(`<strong>${token.name}</strong> Entangle BODY: ${result.body}.`, phase, segment);
       }
     } else if (result.action === "remove") {
       await token.document.unsetFlag("hero-combat-engine", "entangleBody");
@@ -1249,10 +1796,7 @@ export class HeroControllerPanel extends Application {
         if (typeof actor.toggleStatusEffect === "function") await actor.toggleStatusEffect(clearId);
         else await token.toggleEffect(effectData);
       }
-      ChatMessage.create({
-        speaker: { alias: "Combat Engine" },
-        content: `<strong>Segment ${phase}.${segment}</strong><br><strong>${token.name}</strong> Entangle removed.`
-      });
+      createCombatChatMessage(`<strong>${token.name}</strong> Entangle removed.`, phase, segment);
     }
 
     await this.render(true);
@@ -1333,11 +1877,12 @@ export class HeroControllerPanel extends Application {
     const toHitRoll = await (new Roll("3d6")).evaluate({ async: true });
     const hit = toHitRoll.total <= targetNumber;
 
-    ChatMessage.create({
-      speaker: { alias: "Combat Engine" },
-      roll: toHitRoll,
-      content: `<strong>Segment ${phase}.${segment}</strong><br><strong>${token.name}</strong> attacks Entangle with <strong>${chosen.label}</strong>: rolled <strong>${toHitRoll.total}</strong> vs target <strong>${targetNumber}</strong> (${hit ? "HIT" : "MISS"}).`
-    });
+    createCombatChatMessage(
+      `<strong>${token.name}</strong> attacks Entangle with <strong>${chosen.label}</strong>: rolled <strong>${toHitRoll.total}</strong> vs target <strong>${targetNumber}</strong> (${hit ? "HIT" : "MISS"}).`,
+      phase,
+      segment,
+      { roll: toHitRoll }
+    );
 
     if (!hit) return;
 
@@ -1419,11 +1964,12 @@ export class HeroControllerPanel extends Application {
 
           lastDamageRoll = await (new Roll(formula)).evaluate({ async: true });
           suggestedDamage = String(lastDamageRoll.total ?? 0);
-          ChatMessage.create({
-            speaker: { alias: "Combat Engine" },
-            roll: lastDamageRoll,
-            content: `<strong>${token.name}</strong> damage roll for Entangle attack (${chosen.label}). Apply defense, then confirm net BODY in the dialog.`
-          });
+          createCombatChatMessage(
+            `<strong>${token.name}</strong> damage roll for Entangle attack (${chosen.label}). Apply defense, then confirm net BODY in the dialog.`,
+            phase,
+            segment,
+            { roll: lastDamageRoll }
+          );
         } catch (err) {
           ui.notifications.error(`Invalid damage formula. Enter BODY manually or try another formula.`);
           console.error("[HERO ERROR] Entangle damage roll failed:", err);
@@ -1448,16 +1994,10 @@ export class HeroControllerPanel extends Application {
           if (typeof actor.toggleStatusEffect === "function") await actor.toggleStatusEffect(clearId);
           else await token.toggleEffect(effectData);
         }
-        ChatMessage.create({
-          speaker: { alias: "Combat Engine" },
-          content: `<strong>Segment ${phase}.${segment}</strong><br><strong>${token.name}</strong> takes ${netBodyDamage} BODY to Entangle after ${defenseApplied} defense (${bodyDamage} rolled) and breaks free.`
-        });
+          createCombatChatMessage(`<strong>${token.name}</strong> takes ${netBodyDamage} BODY to Entangle after ${defenseApplied} defense (${bodyDamage} rolled) and breaks free.`, phase, segment);
       } else {
         await token.document.setFlag("hero-combat-engine", "entangleBody", remaining);
-        ChatMessage.create({
-          speaker: { alias: "Combat Engine" },
-          content: `<strong>Segment ${phase}.${segment}</strong><br><strong>${token.name}</strong> takes ${netBodyDamage} BODY to Entangle after ${defenseApplied} defense (${bodyDamage} rolled). ${remaining} BODY remaining.`
-        });
+          createCombatChatMessage(`<strong>${token.name}</strong> takes ${netBodyDamage} BODY to Entangle after ${defenseApplied} defense (${bodyDamage} rolled). ${remaining} BODY remaining.`, phase, segment);
       }
       break;
     }
@@ -1469,41 +2009,35 @@ export class HeroControllerPanel extends Application {
     if (!token || !actor) return;
     if (!isPrivileged() && !actor.isOwner) return;
 
+    const configuredStats = getCombatValueCharacteristics();
     const activeMods = token.document.getFlag("hero-combat-engine", "cvSegmentMods") ?? [];
     const activeSummary = activeMods.length
       ? activeMods.map(m => {
-        const parts = [];
-        if (m.ocvMod) parts.push(`OCV ${m.ocvMod > 0 ? "+" : ""}${m.ocvMod}`);
-        if (m.dcvMod) parts.push(`DCV ${m.dcvMod > 0 ? "+" : ""}${m.dcvMod}`);
-        if (m.mcvMod) parts.push(`MCV ${m.mcvMod > 0 ? "+" : ""}${m.mcvMod}`);
+        const parts = formatCombatValueModParts(getCombatValueModsFromEntry(m), configuredStats);
         return `${parts.join(", ")} (${m.remainingSegments} segment${m.remainingSegments === 1 ? "" : "s"} left)`;
       }).join("<br>")
       : "None";
 
+    const statSlidersMarkup = configuredStats.map((statKey, index) => `
+      <label>${getCharacteristicLabel(statKey)} modifier:</label>
+      <input type="range" id="cv-mod-${index}" min="-10" max="10" step="1" value="0" oninput="this.nextElementSibling.textContent=this.value;"/>
+      <span id="cv-mod-${index}-val">0</span>
+    `).join("");
+
     const result = await new Promise(resolve => {
       new Dialog({
-        title: `Temporary CV Modifiers — ${token.name}`,
+        title: `Temporary Combat Value Modifiers — ${token.name}`,
         content: `
           <div style="display:grid;gap:8px;margin-top:4px;">
             <p style="margin:0;font-size:0.85em;color:var(--color-text-dark-secondary);">
-              Right-click CV controls. Apply temporary OCV/DCV/MCV changes for a fixed number of segments.
+              Right-click combat values. Apply temporary characteristic changes for a fixed number of segments.
             </p>
             <div style="font-size:0.8em;padding:4px 6px;border:1px solid var(--color-border-light-secondary);border-radius:4px;">
               <strong>Active modifiers:</strong><br>${activeSummary}
             </div>
 
             <div style="display:grid;grid-template-columns:130px 1fr 42px;gap:6px 8px;align-items:center;">
-              <label>OCV modifier:</label>
-              <input type="range" id="cv-ocv" min="-10" max="10" step="1" value="0" oninput="this.nextElementSibling.textContent=this.value;"/>
-              <span id="cv-ocv-val">0</span>
-
-              <label>DCV modifier:</label>
-              <input type="range" id="cv-dcv" min="-10" max="10" step="1" value="0" oninput="this.nextElementSibling.textContent=this.value;"/>
-              <span id="cv-dcv-val">0</span>
-
-              <label>MCV modifier:</label>
-              <input type="range" id="cv-mcv" min="-10" max="10" step="1" value="0" oninput="this.nextElementSibling.textContent=this.value;"/>
-              <span id="cv-mcv-val">0</span>
+              ${statSlidersMarkup}
             </div>
 
             <div style="display:flex;align-items:center;gap:8px;">
@@ -1512,25 +2046,37 @@ export class HeroControllerPanel extends Application {
             </div>
           </div>
         `,
-        buttons: Object.fromEntries(Object.entries({
-          apply: {
-            icon: '<i class="fas fa-check"></i>',
-            label: "Apply",
-            callback: html => resolve({
-              action: "apply",
-              ocvMod: parseInt(html.find("#cv-ocv").val()) || 0,
-              dcvMod: parseInt(html.find("#cv-dcv").val()) || 0,
-              mcvMod: parseInt(html.find("#cv-mcv").val()) || 0,
-              segments: parseInt(html.find("#cv-segments").val()) || 1
-            })
-          },
-          clear: activeMods.length ? {
-            icon: '<i class="fas fa-trash"></i>',
-            label: "Clear Active",
-            callback: () => resolve({ action: "clear" })
-          } : undefined,
-          cancel: { label: "Cancel", callback: () => resolve(null) }
-        }).filter(([_, v]) => v !== undefined)),
+        buttons: (() => {
+          const btnObj = {
+            apply: {
+              icon: '<i class="fas fa-check"></i>',
+              label: "Apply",
+              callback: html => {
+                const statMods = {};
+                configuredStats.forEach((statKey, index) => {
+                  const delta = parseInt(html.find(`#cv-mod-${index}`).val()) || 0;
+                  if (!delta) return;
+                  statMods[statKey] = delta;
+                });
+
+                resolve({
+                  action: "apply",
+                  statMods,
+                  segments: parseInt(html.find("#cv-segments").val()) || 1
+                });
+              }
+            },
+            cancel: { label: "Cancel", callback: () => resolve(null) }
+          };
+          if (activeMods.length) {
+            btnObj.clear = {
+              icon: '<i class="fas fa-trash"></i>',
+              label: "Clear Active",
+              callback: () => resolve({ action: "clear" })
+            };
+          }
+          return btnObj;
+        })(),
         default: "apply"
       }).render(true);
     });
@@ -1541,64 +2087,44 @@ export class HeroControllerPanel extends Application {
     const segment = canvas.scene.getFlag("hero-combat-engine", "heroSegment") ?? 1;
 
     if (result.action === "clear") {
-      const total = activeMods.reduce((acc, m) => {
-        acc.ocv += m.ocvMod ?? 0;
-        acc.dcv += m.dcvMod ?? 0;
-        acc.mcv += m.mcvMod ?? 0;
-        return acc;
-      }, { ocv: 0, dcv: 0, mcv: 0 });
-
-      const chars = actor.system?.characteristics ?? {};
+      const total = sumCombatValueMods(activeMods);
       const updates = {};
-      if (total.ocv) updates["system.characteristics.ocv.value"] = (chars.ocv?.value ?? 0) - total.ocv;
-      if (total.dcv) updates["system.characteristics.dcv.value"] = (chars.dcv?.value ?? 0) - total.dcv;
-      Object.assign(updates, getMCVUpdateData(actor, -total.mcv));
+      for (const [statKey, delta] of Object.entries(total)) {
+        Object.assign(updates, getCharacteristicUpdateData(actor, statKey, -delta));
+      }
 
       if (Object.keys(updates).length) await actor.update(updates);
       await token.document.unsetFlag("hero-combat-engine", "cvSegmentMods");
 
-      ChatMessage.create({
-        speaker: { alias: "Combat Engine" },
-        content: `<strong>Segment ${phase}.${segment}</strong><br><strong>${token.name}</strong> CV modifiers cleared.`
-      });
+      createCombatChatMessage(`<strong>${token.name}</strong> combat value modifiers cleared.`, phase, segment);
 
       await this.render(true);
       return;
     }
 
     const segments = Math.max(1, result.segments);
-    if (!result.ocvMod && !result.dcvMod && !result.mcvMod) {
-      ui.notifications.warn("Set at least one CV modifier (OCV, DCV, or MCV). ");
+    if (!Object.keys(result.statMods ?? {}).length) {
+      ui.notifications.warn("Set at least one combat value modifier.");
       return;
     }
 
-    const chars = actor.system?.characteristics ?? {};
-    const updates = {
-      "system.characteristics.ocv.value": (chars.ocv?.value ?? 0) + result.ocvMod,
-      "system.characteristics.dcv.value": (chars.dcv?.value ?? 0) + result.dcvMod,
-      ...getMCVUpdateData(actor, result.mcvMod)
-    };
+    const updates = {};
+    for (const [statKey, delta] of Object.entries(result.statMods)) {
+      Object.assign(updates, getCharacteristicUpdateData(actor, statKey, delta));
+    }
     await actor.update(updates);
 
     const newEntry = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      ocvMod: result.ocvMod,
-      dcvMod: result.dcvMod,
-      mcvMod: result.mcvMod,
+      statMods: result.statMods,
       remainingSegments: segments
     };
 
     await token.document.setFlag("hero-combat-engine", "cvSegmentMods", [...activeMods, newEntry]);
 
-    const parts = [];
-    if (result.ocvMod) parts.push(`OCV ${result.ocvMod > 0 ? "+" : ""}${result.ocvMod}`);
-    if (result.dcvMod) parts.push(`DCV ${result.dcvMod > 0 ? "+" : ""}${result.dcvMod}`);
-    if (result.mcvMod) parts.push(`MCV ${result.mcvMod > 0 ? "+" : ""}${result.mcvMod}`);
+    const parts = formatCombatValueModParts(result.statMods, configuredStats);
 
-    ChatMessage.create({
-      speaker: { alias: "Combat Engine" },
-      content: `<strong>Segment ${phase}.${segment}</strong><br><strong>${token.name}</strong> temporary CV mod applied: ${parts.join(", ")} for ${segments} segment${segments === 1 ? "" : "s"}.`
-    });
+    createCombatChatMessage(`<strong>${token.name}</strong> temporary combat value mod applied: ${parts.join(", ")} for ${segments} segment${segments === 1 ? "" : "s"}.`, phase, segment);
 
     await this.render(true);
   }
@@ -1626,10 +2152,7 @@ export class HeroControllerPanel extends Application {
 
     const phase   = canvas.scene.getFlag("hero-combat-engine", "heroPhase")   ?? 1;
     const segment = canvas.scene.getFlag("hero-combat-engine", "heroSegment") ?? 1;
-    ChatMessage.create({
-      speaker: { alias: "Combat Engine" },
-      content: `<strong>Segment ${phase}.${segment}</strong><br><strong>${token.name}</strong> takes a Recovery.<br>STUN ${stun} → ${newStun} &nbsp;|&nbsp; END ${end} → ${newEnd}`
-    });
+    createCombatChatMessage(`<strong>${token.name}</strong> takes a Recovery.<br>STUN ${stun} → ${newStun} &nbsp;|&nbsp; END ${end} → ${newEnd}`, phase, segment);
 
     // Advance the turn after recovery
     if (game.heroCombat?.endTokenSegment) {
@@ -1646,23 +2169,28 @@ export class HeroControllerPanel extends Application {
     const actor = token?.actor;
     if (token?.document && actor) {
       const activeMods = token.document.getFlag("hero-combat-engine", "cvSegmentMods") ?? [];
-      if (activeMods.length) {
-        const total = activeMods.reduce((acc, m) => {
-          acc.ocv += m.ocvMod ?? 0;
-          acc.dcv += m.dcvMod ?? 0;
-          acc.mcv += m.mcvMod ?? 0;
-          return acc;
-        }, { ocv: 0, dcv: 0, mcv: 0 });
-
-        const chars = actor.system?.characteristics ?? {};
-        const updates = {};
-        if (total.ocv) updates["system.characteristics.ocv.value"] = (chars.ocv?.value ?? 0) - total.ocv;
-        if (total.dcv) updates["system.characteristics.dcv.value"] = (chars.dcv?.value ?? 0) - total.dcv;
-        Object.assign(updates, getMCVUpdateData(actor, -total.mcv));
-
-        if (Object.keys(updates).length) await actor.update(updates);
-        await token.document.unsetFlag("hero-combat-engine", "cvSegmentMods");
+      const adjustments = token.document.getFlag("hero-combat-engine", "adjustments") ?? [];
+      const bonusUpdates = getRevertUpdatesForBonusFlags(actor, token.document);
+      const combinedDeltas = {};
+      for (const [statKey, delta] of Object.entries(getRevertDeltaMapForCvMods(activeMods))) {
+        combinedDeltas[statKey] = (combinedDeltas[statKey] ?? 0) + Number(delta);
       }
+      for (const [statKey, delta] of Object.entries(getRevertDeltaMapForAdjustments(adjustments))) {
+        combinedDeltas[statKey] = (combinedDeltas[statKey] ?? 0) + Number(delta);
+      }
+
+      const updates = {};
+      for (const [statKey, delta] of Object.entries(combinedDeltas)) {
+        Object.assign(updates, getAdjustmentUpdateData(actor, statKey, delta));
+      }
+      Object.assign(updates, bonusUpdates);
+
+      if (Object.keys(updates).length) await actor.update(updates);
+      if (activeMods.length) await token.document.unsetFlag("hero-combat-engine", "cvSegmentMods");
+      if (adjustments.length) await token.document.unsetFlag("hero-combat-engine", "adjustments");
+      if (token.document.getFlag("hero-combat-engine", "coverDCV") != null) await token.document.unsetFlag("hero-combat-engine", "coverDCV");
+      if (token.document.getFlag("hero-combat-engine", "ocvBonus") != null) await token.document.unsetFlag("hero-combat-engine", "ocvBonus");
+      if (token.document.getFlag("hero-combat-engine", "mcvBonus") != null) await token.document.unsetFlag("hero-combat-engine", "mcvBonus");
     }
 
     // If this token is currently acting, advance first so turn order stays valid

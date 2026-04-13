@@ -1,11 +1,11 @@
 import { HeroControllerPanel } from "./controller-panel.js";
 import { SPD_MAP } from "./spd-map.js";
-import { getActingTokens, resetActingTurnOrder } from "./segment-engine.js";
-import { heroLog } from "./utils.js";
+import { getActingTokens, resetActingTurnOrder, migrateLegacyAdjustments } from "./segment-engine.js";
+import { combatEngineSpeaker, heroLog } from "./utils.js";
 
-export async function beginCombat() {
+export async function beginCombat(tokenIds = null) {
   if (!canvas?.scene) return;
-  const selected = canvas.tokens.controlled;
+  const selected = (tokenIds?.length ? tokenIds.map(id => canvas.tokens.get(id)).filter(Boolean) : canvas.tokens.controlled);
   heroLog("beginCombat called with", selected.length, "selected tokens");
 
   if (selected.length === 0) {
@@ -62,10 +62,9 @@ export async function beginCombat() {
   heroLog("Acting order set:", actingOrder);
 
   ChatMessage.create({
-    speaker: { alias: "Combat Engine" },
+    speaker: combatEngineSpeaker(1, 1),
     content: `
       <strong>Entering segmented movement</strong><br>
-      Segment 1.1<br><br>
       <strong>Participants:</strong><br>
       ${participants.map(p => `• ${p}`).join("<br>")}
     `
@@ -90,13 +89,18 @@ export async function beginCombat() {
     game.socket.emit("module.hero-combat-engine", { type: "open-tracker" });
   }
 
+  const migrated = await migrateLegacyAdjustments(selected.map(t => t.id));
+  if (migrated.migratedEntries > 0) {
+    heroLog("Migrated legacy adjustments on combat start", migrated);
+  }
+
   // Highlight and announce the first token to act in segment 1
   await resetActingTurnOrder();
 }
 
-export async function addSelectedTokens() {
+export async function addSelectedTokens(tokenIds = null) {
   if (!canvas?.scene) return;
-  const selected = canvas.tokens.controlled;
+  const selected = (tokenIds?.length ? tokenIds.map(id => canvas.tokens.get(id)).filter(Boolean) : canvas.tokens.controlled);
   heroLog("addSelectedTokens called with", selected.length, "selected tokens");
 
   if (selected.length === 0) {
@@ -111,7 +115,7 @@ export async function addSelectedTokens() {
   
   if (currentSegment === null || currentSegment === undefined) {
     heroLog("No HERO combat in progress, starting new one");
-    await beginCombat();
+    await beginCombat(selected.map(token => token.id));
     return;
   }
 
@@ -120,8 +124,8 @@ export async function addSelectedTokens() {
   heroLog("HERO combat in progress, tokens will participate from next segment");
   const names = selected.map(t => t.name);
   ChatMessage.create({
-    speaker: { alias: "Combat Engine" },
-    content: `<strong>Segment ${phase}.${segment}</strong><br><strong>Tokens added to combat:</strong><br>${names.map(n => `• ${n}`).join("<br>")}<br><br><em>They will act starting in the next segment.</em>`
+    speaker: combatEngineSpeaker(phase, segment),
+    content: `<strong>Tokens added to combat:</strong><br>${names.map(n => `• ${n}`).join("<br>")}<br><br><em>They will act starting in the next segment.</em>`
   });
 
   // Update acting order
@@ -151,6 +155,13 @@ export async function addSelectedTokens() {
   ]?.id ?? null;
 
   await canvas.scene.setFlag("hero-combat-engine", "hero-combat.actingOrder", actingOrder);
+
+  if (newTokenIds.length) {
+    const migrated = await migrateLegacyAdjustments(newTokenIds);
+    if (migrated.migratedEntries > 0) {
+      heroLog("Migrated legacy adjustments for added tokens", migrated);
+    }
+  }
 
   const currentActingTokensAfter = getActingTokens(currentSegment);
   const preservedIndex = currentlyActingId

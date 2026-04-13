@@ -1,6 +1,13 @@
 import { SPD_MAP } from "./spd-map.js";
 import { highlightActing, highlightToken } from "./highlight.js";
-import { heroLog } from "./utils.js";
+import { combatEngineSpeaker, heroLog } from "./utils.js";
+
+async function postCombatChat(content, phase = null, segment = null) {
+  return ChatMessage.create({
+    speaker: combatEngineSpeaker(phase, segment),
+    content
+  });
+}
 
 function getMCVUpdateData(actor, delta) {
   if (!delta) return {};
@@ -19,6 +26,134 @@ function getMCVUpdateData(actor, delta) {
 
   updates["system.characteristics.mcv.value"] = delta;
   return updates;
+}
+
+function normalizeCharacteristicKey(key) {
+  return String(key ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, "");
+}
+
+function getAdjustmentBaseCharacteristicValue(actor, statKey) {
+  if (statKey === "mcv") {
+    const chars = actor.system?.characteristics ?? {};
+    return Number(chars.mcv?.value ?? chars.dmcv?.value ?? chars.omcv?.value ?? 0);
+  }
+  return Number(actor.system?.characteristics?.[statKey]?.value ?? 0);
+}
+
+function getAdjustmentTargetDelta(baseValue, points, type) {
+  const pct = Math.max(0, Number(points ?? 0));
+  const magnitude = Math.round((Number(baseValue ?? 0) * pct) / 100);
+  return type === "drain" ? -Math.abs(magnitude) : Math.abs(magnitude);
+}
+
+// One-time migration for legacy adjustment entries that predate metadata-backed
+// Aid/Drain handling. Adds charKey/baseValue/appliedDelta and applies the
+// corresponding stat delta so future fades are accurate.
+export async function migrateLegacyAdjustments(tokenIds = []) {
+  if (!canvas?.scene) return { migratedTokens: 0, migratedEntries: 0 };
+
+  const ids = Array.isArray(tokenIds) && tokenIds.length
+    ? tokenIds
+    : (canvas.scene.getFlag("hero-combat-engine", "hero-combat.actingOrder") ?? []);
+
+  let migratedTokens = 0;
+  let migratedEntries = 0;
+
+  for (const tokenId of ids) {
+    const token = canvas.tokens.get(tokenId);
+    const actor = token?.actor;
+    if (!token?.document || !actor) continue;
+
+    const adjustments = token.document.getFlag("hero-combat-engine", "adjustments") ?? [];
+    if (!adjustments.length) continue;
+
+    const statDeltas = {};
+    let touched = false;
+    const migrated = adjustments.map(adj => {
+      const hasAppliedMeta = Number.isFinite(Number(adj.appliedDelta));
+      const hasBaseMeta = Number.isFinite(Number(adj.baseValue));
+      const hasCharKey = Boolean(normalizeCharacteristicKey(adj.charKey));
+      if (hasAppliedMeta && hasBaseMeta && hasCharKey) return adj;
+
+      const statKey = normalizeCharacteristicKey(adj.charKey ?? adj.char);
+      if (!statKey) return adj;
+
+      const baseValue = getAdjustmentBaseCharacteristicValue(actor, statKey);
+      const appliedDelta = getAdjustmentTargetDelta(baseValue, adj.points, adj.type);
+      if (appliedDelta) {
+        statDeltas[statKey] = (statDeltas[statKey] ?? 0) + appliedDelta;
+      }
+
+      touched = true;
+      migratedEntries += 1;
+      return {
+        ...adj,
+        charKey: statKey,
+        baseValue,
+        appliedDelta
+      };
+    });
+
+    if (!touched) continue;
+
+    const updates = {};
+    for (const [statKey, delta] of Object.entries(statDeltas)) {
+      Object.assign(updates, getCharacteristicUpdateData(actor, statKey, delta));
+    }
+    if (Object.keys(updates).length) {
+      await actor.update(updates);
+    }
+
+    await token.document.setFlag("hero-combat-engine", "adjustments", migrated);
+    migratedTokens += 1;
+  }
+
+  return { migratedTokens, migratedEntries };
+}
+
+function getCharacteristicUpdateData(actor, statKey, delta) {
+  if (!delta) return {};
+  if (statKey === "mcv") return getMCVUpdateData(actor, delta);
+
+  const chars = actor.system?.characteristics ?? {};
+  return {
+    [`system.characteristics.${statKey}.value`]: (chars?.[statKey]?.value ?? 0) + delta
+  };
+}
+
+function getCombatValueModsFromEntry(entry) {
+  const statMods = {};
+
+  if (entry?.statMods && typeof entry.statMods === "object") {
+    for (const [key, value] of Object.entries(entry.statMods)) {
+      const statKey = normalizeCharacteristicKey(key);
+      const numeric = Number(value ?? 0);
+      if (!statKey || !Number.isFinite(numeric) || numeric === 0) continue;
+      statMods[statKey] = (statMods[statKey] ?? 0) + numeric;
+    }
+  }
+
+  const legacyMap = {
+    ocv: Number(entry?.ocvMod ?? 0),
+    dcv: Number(entry?.dcvMod ?? 0),
+    mcv: Number(entry?.mcvMod ?? 0)
+  };
+  for (const [statKey, numeric] of Object.entries(legacyMap)) {
+    if (!Number.isFinite(numeric) || numeric === 0) continue;
+    statMods[statKey] = (statMods[statKey] ?? 0) + numeric;
+  }
+
+  return statMods;
+}
+
+function formatCombatValueModParts(statMods) {
+  return Object.entries(statMods ?? {})
+    .filter(([, value]) => Number(value ?? 0) !== 0)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([statKey, value]) => `${statKey.toUpperCase()} ${value > 0 ? "+" : ""}${value}`);
 }
 
 function isIncapacitatedActor(actor) {
@@ -69,10 +204,7 @@ async function post12RecoveryAllCombatants() {
   if (messages.length > 0 && game.settings.get("hero-combat-engine", "chatPost12Recovery")) {
     const segment = canvas.scene.getFlag("hero-combat-engine", "heroSegment") ?? 1;
     const phase = canvas.scene.getFlag("hero-combat-engine", "heroPhase") ?? 1;
-    ChatMessage.create({
-      speaker: { alias: "Combat Engine" },
-      content: `<strong>Segment ${phase}.${segment}</strong><br><strong>Post-Segment 12 Recovery (All Combatants):</strong><br>${messages.join("<br>")}`
-    });
+    await postCombatChat(`<strong>Post-Segment 12 Recovery (All Combatants):</strong><br>${messages.join("<br>")}`, phase, segment);
   }
 }
 
@@ -136,10 +268,7 @@ async function segmentFlashRecovery() {
   if (clearMessages.length && game.settings.get("hero-combat-engine", "chatPost12Recovery")) {
     const segment = canvas.scene.getFlag("hero-combat-engine", "heroSegment") ?? 1;
     const phase   = canvas.scene.getFlag("hero-combat-engine", "heroPhase") ?? 1;
-    ChatMessage.create({
-      speaker: { alias: "Combat Engine" },
-      content: `<strong>Segment ${phase}.${segment}</strong><br><strong>Flash Recovery:</strong><br>${clearMessages.join("<br>")}`
-    });
+    await postCombatChat(`<strong>Flash Recovery:</strong><br>${clearMessages.join("<br>")}`, phase, segment);
   }
 }
 
@@ -154,12 +283,14 @@ async function adjustmentFade(interval = "phase") {
 
   for (const tokenId of actingOrder) {
     const t = canvas.tokens.get(tokenId);
-    if (!t) continue;
+    const actor = t?.actor;
+    if (!t || !actor) continue;
 
     const adjustments = t.document.getFlag("hero-combat-engine", "adjustments") ?? [];
     if (!adjustments.length) continue;
 
     const kept = [];
+    const statDeltas = {};
     for (const adj of adjustments) {
       const fadeInterval = adj.fadeInterval === "segment" ? "segment" : "phase";
       if (fadeInterval !== normalizedInterval) {
@@ -167,7 +298,22 @@ async function adjustmentFade(interval = "phase") {
         continue;
       }
 
+      const statKey = normalizeCharacteristicKey(adj.charKey ?? adj.char);
       const newPoints = Math.max(adj.points - adj.fadeRate, 0);
+      const hasAppliedMeta = Number.isFinite(Number(adj.appliedDelta));
+      const hasBaseMeta = Number.isFinite(Number(adj.baseValue));
+      let baseValue = Number(adj.baseValue ?? 0);
+      let newApplied = Number(adj.appliedDelta ?? 0);
+      if (hasAppliedMeta && hasBaseMeta) {
+        const oldApplied = Number(adj.appliedDelta ?? 0);
+        baseValue = Number(adj.baseValue ?? getAdjustmentBaseCharacteristicValue(actor, statKey));
+        newApplied = getAdjustmentTargetDelta(baseValue, newPoints, adj.type);
+        const delta = newApplied - oldApplied;
+        if (delta !== 0) {
+          statDeltas[statKey] = (statDeltas[statKey] ?? 0) + delta;
+        }
+      }
+
       const typeLabel = adj.type === "drain" ? "Drain" : "Aid";
       const fadeUnitLabel = fadeInterval === "segment" ? "Segment" : "Phase";
       if (newPoints <= 0) {
@@ -175,8 +321,16 @@ async function adjustmentFade(interval = "phase") {
         // entry dropped — not pushed to kept
       } else {
         messages.push(`<strong>${t.name}</strong>: ${typeLabel} ${adj.char} — ${adj.points} → ${newPoints} pts remaining (${adj.fadeRate}/${fadeUnitLabel}).`);
-        kept.push({ ...adj, points: newPoints });
+        kept.push({ ...adj, points: newPoints, charKey: statKey, ...(hasAppliedMeta && hasBaseMeta ? { baseValue, appliedDelta: newApplied } : {}) });
       }
+    }
+
+    const updates = {};
+    for (const [statKey, delta] of Object.entries(statDeltas)) {
+      Object.assign(updates, getCharacteristicUpdateData(actor, statKey, delta));
+    }
+    if (Object.keys(updates).length) {
+      await actor.update(updates);
     }
 
     if (kept.length) {
@@ -190,10 +344,7 @@ async function adjustmentFade(interval = "phase") {
     const segment = canvas.scene.getFlag("hero-combat-engine", "heroSegment") ?? 1;
     const phase   = canvas.scene.getFlag("hero-combat-engine", "heroPhase")   ?? 1;
     const intervalLabel = normalizedInterval === "segment" ? "Per Segment" : "Per Phase";
-    ChatMessage.create({
-      speaker: { alias: "Combat Engine" },
-      content: `<strong>Segment ${phase}.${segment}</strong><br><strong>Adjustment Fade (${intervalLabel}):</strong><br>${messages.join("<br>")}`
-    });
+    await postCombatChat(`<strong>Adjustment Fade (${intervalLabel}):</strong><br>${messages.join("<br>")}`, phase, segment);
   }
 }
 
@@ -211,31 +362,28 @@ async function cvSegmentModifierTick() {
     if (!mods.length) continue;
 
     const kept = [];
-    const revert = { ocv: 0, dcv: 0, mcv: 0 };
+    const revert = {};
 
     for (const mod of mods) {
       const remaining = Math.max(0, (mod.remainingSegments ?? 1) - 1);
+      const modStats = getCombatValueModsFromEntry(mod);
       if (remaining <= 0) {
-        revert.ocv += mod.ocvMod ?? 0;
-        revert.dcv += mod.dcvMod ?? 0;
-        revert.mcv += mod.mcvMod ?? 0;
+        for (const [statKey, delta] of Object.entries(modStats)) {
+          revert[statKey] = (revert[statKey] ?? 0) + delta;
+        }
 
-        const parts = [];
-        if (mod.ocvMod) parts.push(`OCV ${mod.ocvMod > 0 ? "+" : ""}${mod.ocvMod}`);
-        if (mod.dcvMod) parts.push(`DCV ${mod.dcvMod > 0 ? "+" : ""}${mod.dcvMod}`);
-        if (mod.mcvMod) parts.push(`MCV ${mod.mcvMod > 0 ? "+" : ""}${mod.mcvMod}`);
+        const parts = formatCombatValueModParts(modStats);
         messages.push(`<strong>${t.name}</strong>: temporary CV mod expired (${parts.join(", ")}).`);
       } else {
         kept.push({ ...mod, remainingSegments: remaining });
       }
     }
 
-    if (revert.ocv || revert.dcv || revert.mcv) {
-      const chars = actor.system?.characteristics ?? {};
+    if (Object.keys(revert).length) {
       const updates = {};
-      if (revert.ocv) updates["system.characteristics.ocv.value"] = (chars.ocv?.value ?? 0) - revert.ocv;
-      if (revert.dcv) updates["system.characteristics.dcv.value"] = (chars.dcv?.value ?? 0) - revert.dcv;
-      Object.assign(updates, getMCVUpdateData(actor, -revert.mcv));
+      for (const [statKey, delta] of Object.entries(revert)) {
+        Object.assign(updates, getCharacteristicUpdateData(actor, statKey, -delta));
+      }
       if (Object.keys(updates).length) await actor.update(updates);
     }
 
@@ -246,10 +394,7 @@ async function cvSegmentModifierTick() {
   if (messages.length && game.settings.get("hero-combat-engine", "chatPost12Recovery")) {
     const segment = canvas.scene.getFlag("hero-combat-engine", "heroSegment") ?? 1;
     const phase   = canvas.scene.getFlag("hero-combat-engine", "heroPhase")   ?? 1;
-    ChatMessage.create({
-      speaker: { alias: "Combat Engine" },
-      content: `<strong>Segment ${phase}.${segment}</strong><br><strong>CV Modifiers:</strong><br>${messages.join("<br>")}`
-    });
+    await postCombatChat(`<strong>CV Modifiers:</strong><br>${messages.join("<br>")}`, phase, segment);
   }
 }
 
@@ -314,10 +459,7 @@ export async function resetActingTurnOrder() {
   heroLog("resetActingTurnOrder index", index, "tokenId", tokenId, "tokenName", tokenName);
   emitTokenHighlight(tokenId);
   if (tokenName && game.settings.get("hero-combat-engine", "chatTokenTurns")) {
-    ChatMessage.create({
-      speaker: { alias: "Combat Engine" },
-      content: `<strong>Segment ${phase}.${segment}</strong><br><strong>${tokenName}</strong> now acts.`
-    });
+    await postCombatChat(`<strong>${tokenName}</strong> now acts.`, phase, segment);
   }
 }
 
@@ -358,10 +500,7 @@ export async function nextActingToken() {
 
   const phase = canvas.scene.getFlag("hero-combat-engine", "heroPhase") ?? 1;
   if (game.settings.get("hero-combat-engine", "chatTokenTurns")) {
-    ChatMessage.create({
-      speaker: { alias: "Combat Engine" },
-      content: `<strong>Segment ${phase}.${segment}</strong><br><strong>${tokenName}</strong> now acts.`
-    });
+    await postCombatChat(`<strong>${tokenName}</strong> now acts.`, phase, segment);
   }
 
   emitTokenHighlight(tokenId);
@@ -390,10 +529,7 @@ export async function previousActingToken() {
 
   const phase = canvas.scene.getFlag("hero-combat-engine", "heroPhase") ?? 1;
   if (game.settings.get("hero-combat-engine", "chatTokenTurns")) {
-    ChatMessage.create({
-      speaker: { alias: "Combat Engine" },
-      content: `<strong>Segment ${phase}.${segment}</strong><br><strong>${tokenName} now acts.</strong>`
-    });
+    await postCombatChat(`<strong>${tokenName} now acts.</strong>`, phase, segment);
   }
 
   emitTokenHighlight(tokenId);
@@ -481,10 +617,7 @@ export async function releaseHold(tokenId) {
   const token = canvas.tokens.get(tokenId);
   const tokenName = token?.name ?? "Unknown";
   if (game.settings.get("hero-combat-engine", "chatTokenTurns")) {
-    ChatMessage.create({
-      speaker: { alias: "Combat Engine" },
-      content: `<strong>Segment ${phase}.${segment}</strong><br><strong>${tokenName}</strong> releases their Hold and now acts.`
-    });
+    await postCombatChat(`<strong>${tokenName}</strong> releases their Hold and now acts.`, phase, segment);
   }
   emitTokenHighlight(tokenId);
 }
@@ -501,10 +634,21 @@ export async function segmentAdvance({ skipWarning = false } = {}) {
     const actingTokens = getActingTokens(segment);
     const currentIndex = getCurrentActingIndex();
     const remaining = actingTokens.slice(currentIndex).map(t => t.name);
-    if (remaining.length > 0) {
+    const heldTokenIds = canvas.scene.getFlag("hero-combat-engine", "hero-combat.heldTokens") ?? [];
+    const heldNames = heldTokenIds
+      .map(id => canvas.tokens.get(id)?.name)
+      .filter(Boolean);
+
+    if (remaining.length > 0 || heldNames.length > 0) {
+      const remainingHtml = remaining.length
+        ? `<p>The following tokens haven't acted yet this segment:</p><ul>${remaining.map(n => `<li>${n}</li>`).join("")}</ul>`
+        : "";
+      const heldHtml = heldNames.length
+        ? `<p><strong>Held tokens will lose their Hold if you advance now:</strong></p><ul>${heldNames.map(n => `<li>${n}</li>`).join("")}</ul>`
+        : "";
       const confirmed = await Dialog.confirm({
         title: "Skip Acting Tokens?",
-        content: `<p>The following tokens haven't acted yet this segment:</p><ul>${remaining.map(n => `<li>${n}</li>`).join("")}</ul><p>Advance to the next segment anyway?</p>`
+        content: `${remainingHtml}${heldHtml}<p>Advance to the next segment anyway?</p>`
       });
       if (!confirmed) return;
     }
@@ -547,29 +691,10 @@ export async function segmentAdvance({ skipWarning = false } = {}) {
     await post12RecoveryAllCombatants();
   }
 
-  // Get all SPD values from SPD_MAP that act in this segment
-  const actingSPDs = [];
-  for (const [spd, segments] of Object.entries(SPD_MAP)) {
-    if (segments.includes(segment)) {
-      actingSPDs.push(parseInt(spd));
-    }
-  }
-
-  // Use getActingTokens to ensure same DEX/END/name sorting as turn order
-  const actingTokenObjects = getActingTokens(segment);
-  const actingTokenNames = actingTokenObjects.map(t => t.name);
-
-  const spdList = actingSPDs.sort((a, b) => a - b).join(", ");
-  const tokenList = actingTokenNames.length
-    ? `<ul>${actingTokenNames.map(name => `<li>${name}</li>`).join("")}</ul>`
-    : "None";
-
-  if (game.settings.get("hero-combat-engine", "chatSegmentSummary")) {
-    ChatMessage.create({
-      speaker: { alias: "Combat Engine" },
-      content: `<strong>Segment ${phase}.${segment}</strong>${spdList ? `<br>SPD Acting: ${spdList}` : ""}<br><strong>Tokens Acting:</strong> ${tokenList}`
-    });
-  }
+  // Use getActingTokens to ensure same DEX/END/name sorting as turn order.
+  // Delay the segment summary until after any empty-segment auto-skip so chat
+  // reflects the segment the tracker actually lands on.
+  let actingTokenObjects = getActingTokens(segment);
 
   // Auto-skip: if this segment has no acting tokens and the setting is on,
   // silently advance again. Cap at 12 iterations to avoid an infinite loop
@@ -594,15 +719,32 @@ export async function segmentAdvance({ skipWarning = false } = {}) {
         await post12RecoveryAllCombatants();
       }
       const nextActors = getActingTokens(segment);
-      if (nextActors.length > 0) break;
+      if (nextActors.length > 0) {
+        actingTokenObjects = nextActors;
+        break;
+      }
       skippedSegments.push(`${phase}.${segment}`);
     }
     if (game.settings.get("hero-combat-engine", "chatSkipEmptySegment") && skippedSegments.length > 0) {
-      ChatMessage.create({
-        speaker: { alias: "Combat Engine" },
-        content: `<em>Skipped empty segment${skippedSegments.length > 1 ? "s" : ""}: ${skippedSegments.join(", ")}. Now at Segment ${phase}.${segment}.</em>`
-      });
+      await postCombatChat(`<em>Skipped empty segment${skippedSegments.length > 1 ? "s" : ""}: ${skippedSegments.join(", ")}.</em>`, phase, segment);
     }
+  }
+
+  const actingSPDs = [];
+  for (const [spd, segments] of Object.entries(SPD_MAP)) {
+    if (segments.includes(segment)) {
+      actingSPDs.push(parseInt(spd));
+    }
+  }
+
+  const actingTokenNames = actingTokenObjects.map(t => t.name);
+  const spdList = actingSPDs.sort((a, b) => a - b).join(", ");
+  const tokenList = actingTokenNames.length
+    ? `<ul>${actingTokenNames.map(name => `<li>${name}</li>`).join("")}</ul>`
+    : "None";
+
+  if (game.settings.get("hero-combat-engine", "chatSegmentSummary")) {
+    await postCombatChat(`${spdList ? `<strong>SPD Acting:</strong> ${spdList}<br>` : ""}<strong>Tokens Acting:</strong> ${tokenList}`, phase, segment);
   }
 
   await resetActingTurnOrder();

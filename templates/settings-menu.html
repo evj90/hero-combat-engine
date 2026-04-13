@@ -175,6 +175,13 @@
         <p class="hint">Comma-separated characteristic keys to show as pip bars, for example: stun, body, end, pre, dex, ego.</p>
       </div>
       <div class="form-group">
+        <label>Combat Value Characteristics</label>
+        <div class="form-fields">
+          <input type="text" name="combatValueCharacteristics" value="{{combatValueCharacteristics}}"/>
+        </div>
+        <p class="hint">Comma-separated characteristic keys shown in the combat values panel and temporary modifier dialog, for example: ocv, dcv, mcv, str, dex, ego.</p>
+      </div>
+      <div class="form-group">
         <label>Accessibility Size</label>
         <div class="form-fields">
           <select name="accessibilitySize">
@@ -208,7 +215,7 @@
         <div class="form-fields">
           <input type="checkbox" name="warnSkipActing" {{#if warnSkipActing}}checked{{/if}}/>
         </div>
-        <p class="hint">Show a confirmation dialog when the GM advances the segment while tokens still have their turn remaining.</p>
+        <p class="hint">Show a confirmation dialog when the GM advances the segment while tokens still have turns remaining or while tokens are currently Holding.</p>
       </div>
       <div class="form-group">
         <label>Auto-Skip Empty Segments</label>

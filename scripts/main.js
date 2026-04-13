@@ -5,6 +5,7 @@ import { beginCombat, addSelectedTokens, refreshCombatOrder } from "./begin-comb
 import { highlightActing, registerHighlightSocketListener, clearHighlights } from "./highlight.js";
 import { endCombat } from "./end-combat.js";
 import { SPD_MAP } from "./spd-map.js";
+import { runMentalIllusionMacro, registerMentalIllusionChatHandlers } from "./mental-illusion-macro.js";
 
 Hooks.once("init", () => {
   game.heroCombat = game.heroCombat || {};
@@ -211,6 +212,15 @@ Hooks.once("init", () => {
     default: "stun,body,end"
   });
 
+  game.settings.register("hero-combat-engine", "combatValueCharacteristics", {
+    name: "Combat Value Characteristics",
+    hint: "Comma-separated characteristic keys shown in the Combat Values panel and used by temporary modifiers (for example: ocv,dcv,mcv or str,dex,ego,pd).",
+    scope: "world",
+    config: false,
+    type: String,
+    default: "ocv,dcv,mcv"
+  });
+
   game.settings.register("hero-combat-engine", "expandedAccessibility", {
     name: "Expanded Accessibility Mode",
     hint: "Increase tracker text size and control hit areas for easier readability and interaction.",
@@ -363,6 +373,8 @@ Hooks.once("init", () => {
 });
 
 Hooks.once("ready", async () => {
+  registerMentalIllusionChatHandlers();
+
   // Load bucket descriptions from editable JSON file in the module folder.
   try {
     const modulePath = game.modules.get("hero-combat-engine")?.path ?? "modules/hero-combat-engine";
@@ -395,6 +407,7 @@ Hooks.once("ready", async () => {
   game.heroCombat.refreshCombatOrder = refreshCombatOrder;
   game.heroCombat.holdToken = holdToken;
   game.heroCombat.releaseHold = releaseHold;
+  game.heroCombat.runMentalIllusionMacro = runMentalIllusionMacro;
 
   // Add a button to the left sidebar
   Hooks.on("getSceneControlButtons", controls => {
@@ -442,10 +455,28 @@ Hooks.once("ready", async () => {
       if (game.heroCombat?.endTokenSegment) {
         await game.heroCombat.endTokenSegment(data.tokenId);
       }
+    } else if (data.type === "previous-segment" && game.user.isGM) {
+      if (game.heroCombat?.previousSegment) await game.heroCombat.previousSegment();
+    } else if (data.type === "next-segment" && game.user.isGM) {
+      if (game.heroCombat?.segmentAdvance) await game.heroCombat.segmentAdvance();
+    } else if (data.type === "previous-token" && game.user.isGM) {
+      if (game.heroCombat?.previousActingToken) await game.heroCombat.previousActingToken();
+    } else if (data.type === "next-token" && game.user.isGM) {
+      if (game.heroCombat?.nextActingToken) await game.heroCombat.nextActingToken();
+    } else if (data.type === "begin-combat" && game.user.isGM) {
+      await beginCombat(data.tokenIds ?? []);
+    } else if (data.type === "add-selected" && game.user.isGM) {
+      await addSelectedTokens(data.tokenIds ?? []);
     } else if (data.type === "remove-combatant" && game.user.isGM) {
       if (data.userId && !userOwnsToken(data.userId, data.tokenId)) return;
       if (game.heroCombat.heroControllerPanel) {
         await game.heroCombat.heroControllerPanel._removeToken(data.tokenId);
+      }
+    } else if (data.type === "remove-combatants" && game.user.isGM) {
+      for (const tokenId of data.tokenIds ?? []) {
+        if (game.heroCombat.heroControllerPanel) {
+          await game.heroCombat.heroControllerPanel._removeToken(tokenId);
+        }
       }
     } else if (data.type === "take-recovery" && game.user.isGM) {
       if (data.userId && !userOwnsToken(data.userId, data.tokenId)) return;
@@ -463,6 +494,12 @@ Hooks.once("ready", async () => {
       if (game.heroCombat.heroControllerPanel) {
         await game.heroCombat.heroControllerPanel._toggleAbort(data.tokenId);
       }
+    } else if (data.type === "highlight-acting" && game.user.isGM) {
+      if (game.heroCombat?.highlightActing) await game.heroCombat.highlightActing();
+    } else if (data.type === "refresh-order" && game.user.isGM) {
+      if (game.heroCombat?.refreshCombatOrder) await game.heroCombat.refreshCombatOrder();
+    } else if (data.type === "end-combat" && game.user.isGM) {
+      if (game.heroCombat?.endCombat) await game.heroCombat.endCombat();
     } else if (data.type === "open-tracker" && !game.user.isGM) {
       if (game.heroCombat.heroControllerPanel) {
         game.heroCombat.heroControllerPanel.render(true);

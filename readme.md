@@ -67,6 +67,8 @@ https://github.com/evj90/hero-combat-engine/archive/refs/heads/main.zip
 ### Per-Combatant Controls
 
 - **Ping** and **Pan** jump the table to a token quickly.
+- **Cover** cycles temporary DCV bonus stages, with right-click direct set.
+- **OCV Bonus** cycles temporary OCV bonus stages, with right-click direct set.
 - **Hold** removes a token from its current place so it can act later in the segment.
 - **Release Hold** inserts that held token immediately after the current acting token.
 - **Abort** marks a token as aborting before it acts.
@@ -88,14 +90,17 @@ https://github.com/evj90/hero-combat-engine/archive/refs/heads/main.zip
 
 - Pip bars for tracked characteristics, defaulting to STUN, BODY, and END.
 - Optional PRE tracking by adding it to the tracked pip characteristics setting.
-- OCV, DCV, and MCV shown directly in each row.
+- Combat value rows are configurable (default OCV, DCV, MCV).
+- Temporary combat value modifiers can target any configured combat-value stat.
 - Color-coded thresholds for Full, Less, Half, Hurt, Risk, and Out states.
 - Accessibility sizing options for larger text and hit areas.
 
 ### Status and Adjustment Tools
 
-- Quick status toggles for Prone, Flashed (Sight), Flashed (Hearing), and Entangled/Restrained.
+- Quick status toggles for Flashed (Sight), Flashed (Hearing), and Entangled/Restrained.
+- Prone is shown when active so it can be managed from the tracker.
 - Cover tracking with one-click DCV stage changes.
+- OCV bonus tracking with one-click stage changes.
 - Drain and Aid badges tracked from the panel.
 - Entangle BODY tracking when present on the token.
 - Extra active effects displayed as icons in the row.
@@ -104,8 +109,8 @@ https://github.com/evj90/hero-combat-engine/archive/refs/heads/main.zip
 
 The settings menu covers four main areas:
 
-- **Tracker behavior**: auto-open for players, auto-close on combat end, SPD column visibility, tracked pip characteristics, hide non-acting tokens, and accessibility sizing.
-- **Turn management**: player turn-ending permissions, skip warnings, automatic empty-segment skipping, incapacitated-token skipping, and DEX tie-break behavior.
+- **Tracker behavior**: auto-open for players, auto-close on combat end, SPD column visibility, tracked pip characteristics, combat value characteristics, hide non-acting tokens, and accessibility sizing.
+- **Turn management**: player turn-ending permissions, skip warnings (including held-token loss warnings), automatic empty-segment skipping, incapacitated-token skipping, and DEX tie-break behavior.
 - **Visuals**: active highlight colors, incapacitated colors, burst settings, ring width, inset, glow radius, and glow intensity.
 - **Recovery and chat output**: token turn messages, segment summaries, skipped segment notices, post-segment 12 recovery messages, and configurable STUN/BODY recovery thresholds.
 

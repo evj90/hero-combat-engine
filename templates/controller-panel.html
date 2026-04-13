@@ -1,51 +1,45 @@
 <div class="hero-tracker{{accessibilityClass}}">
   <header class="encounter-controls flexrow">
     <nav class="segment-nav flexrow">
-      {{#if isGM}}
-      <a class="encounter-control hero-tracker-btn" id="hero-prev-segment" title="Previous Segment">
+      <a class="encounter-control hero-tracker-btn{{#unless canManageCombat}} disabled{{/unless}}" id="hero-prev-segment" title="Previous Segment{{#unless canManageCombat}} (Unavailable for current user){{/unless}}" aria-disabled="{{#unless canManageCombat}}true{{else}}false{{/unless}}">
         <i class="fas fa-step-backward"></i>
       </a>
-      <a class="encounter-control hero-tracker-btn" id="hero-prev-token" title="Previous Token">
+      <a class="encounter-control hero-tracker-btn{{#unless canManageCombat}} disabled{{/unless}}" id="hero-prev-token" title="Previous Token{{#unless canManageCombat}} (Unavailable for current user){{/unless}}" aria-disabled="{{#unless canManageCombat}}true{{else}}false{{/unless}}">
         <i class="fas fa-chevron-left"></i>
       </a>
-      {{/if}}
       <h3 class="encounter-title flex1">Segment {{phase}}.{{segment}}</h3>
-      {{#if isGM}}
-      <a class="encounter-control hero-tracker-btn" id="hero-next-token" title="Next Token">
+      <a class="encounter-control hero-tracker-btn{{#unless canManageCombat}} disabled{{/unless}}" id="hero-next-token" title="Next Token{{#unless canManageCombat}} (Unavailable for current user){{/unless}}" aria-disabled="{{#unless canManageCombat}}true{{else}}false{{/unless}}">
         <i class="fas fa-chevron-right"></i>
       </a>
-      <a class="encounter-control hero-tracker-btn" id="hero-next-segment" title="Next Segment">
+      <a class="encounter-control hero-tracker-btn{{#unless canManageCombat}} disabled{{/unless}}" id="hero-next-segment" title="Next Segment{{#unless canManageCombat}} (Unavailable for current user){{/unless}}" aria-disabled="{{#unless canManageCombat}}true{{else}}false{{/unless}}">
         <i class="fas fa-step-forward"></i>
       </a>
-      {{/if}}
       <a class="encounter-control hero-tracker-btn{{#if hideNonActing}} active{{/if}}" id="hero-toggle-hide-non-acting" title="{{#if hideNonActing}}Show all tokens{{else}}Hide non-acting tokens{{/if}}">
         <i class="fas fa-eye{{#if hideNonActing}}-slash{{/if}}"></i>
       </a>
     </nav>
   </header>
 
-  {{#if isGM}}
   <nav class="directory-header flexrow hero-gm-controls">
-    <a class="encounter-control hero-tracker-btn" id="hero-begin-combat" title="Begin Combat">
+    <a class="encounter-control hero-tracker-btn{{#unless canManageCombat}} disabled{{/unless}}" id="hero-begin-combat" title="Begin Combat{{#unless canManageCombat}} (Unavailable for current user){{/unless}}" aria-disabled="{{#unless canManageCombat}}true{{else}}false{{/unless}}">
       <i class="fas fa-fist-raised"></i> Begin
     </a>
-    <a class="encounter-control hero-tracker-btn" id="hero-add-selected" title="Add Selected Tokens to Combat">
+    <a class="encounter-control hero-tracker-btn{{#unless canManageCombat}} disabled{{/unless}}" id="hero-add-selected" title="Add Selected Tokens to Combat{{#unless canManageCombat}} (Unavailable for current user){{/unless}}" aria-disabled="{{#unless canManageCombat}}true{{else}}false{{/unless}}">
       <i class="fas fa-plus"></i> Add
     </a>
-    <a class="encounter-control hero-tracker-btn" id="hero-remove-selected" title="Remove Selected Tokens from Combat">
+    <a class="encounter-control hero-tracker-btn{{#unless canManageCombat}} disabled{{/unless}}" id="hero-remove-selected" title="Remove Selected Tokens from Combat{{#unless canManageCombat}} (Unavailable for current user){{/unless}}" aria-disabled="{{#unless canManageCombat}}true{{else}}false{{/unless}}">
       <i class="fas fa-minus"></i> Remove
     </a>
-    <a class="encounter-control hero-tracker-btn" id="hero-highlight" title="Highlight the current acting token">
+    <a class="encounter-control hero-tracker-btn{{#unless canManageCombat}} disabled{{/unless}}" id="hero-highlight" title="Highlight the current acting token{{#unless canManageCombat}} (Unavailable for current user){{/unless}}" aria-disabled="{{#unless canManageCombat}}true{{else}}false{{/unless}}">
       <i class="fas fa-crosshairs"></i> Acting
     </a>
-    <a class="encounter-control hero-tracker-btn" id="hero-refresh-order" title="Refresh Combat Order (re-sort by current DEX/SPD)">
+    <a class="encounter-control hero-tracker-btn{{#unless canManageCombat}} disabled{{/unless}}" id="hero-refresh-order" title="Refresh Combat Order (re-sort by current DEX/SPD){{#unless canManageCombat}} (Unavailable for current user){{/unless}}" aria-disabled="{{#unless canManageCombat}}true{{else}}false{{/unless}}">
       <i class="fas fa-rotate"></i> Refresh
     </a>
-    <a class="encounter-control hero-tracker-btn" id="hero-end-combat" title="End Combat">
+    <a class="encounter-control hero-tracker-btn{{#unless canManageCombat}} disabled{{/unless}}" id="hero-end-combat" title="End Combat{{#unless canManageCombat}} (Unavailable for current user){{/unless}}" aria-disabled="{{#unless canManageCombat}}true{{else}}false{{/unless}}">
       <i class="fas fa-flag-checkered"></i> End
     </a>
   </nav>
-  {{/if}}
 
   {{#if hasStaleTokens}}
   <div class="hero-stale-warning">
@@ -81,10 +75,10 @@
             </div>
             {{/each}}
           </div>
-          <div class="hero-cv-stack" data-token-id="{{id}}" title="Combat Values (right-click to apply temporary modifiers)">
-            <div class="hero-cv-row"><span class="hero-cv-lbl">OCV</span><span class="hero-cv-val{{#if ocvTempClass}} {{ocvTempClass}}{{/if}}">{{ocv}}</span></div>
-            <div class="hero-cv-row"><span class="hero-cv-lbl">DCV</span><span class="hero-cv-val{{#if dcvTempClass}} {{dcvTempClass}}{{/if}}">{{dcv}}</span></div>
-            <div class="hero-cv-row"><span class="hero-cv-lbl">MCV</span><span class="hero-cv-val{{#if mcvTempClass}} {{mcvTempClass}}{{/if}}">{{mcv}}</span></div>
+          <div class="hero-cv-stack{{#unless canManageCv}} read-only{{/unless}}" data-token-id="{{id}}" title="Combat Values{{#if canManageCv}} (right-click to apply temporary modifiers){{else}} (Unavailable for current user){{/if}}" aria-disabled="{{#unless canManageCv}}true{{else}}false{{/unless}}">
+            {{#each combatValueRows}}
+            <div class="hero-cv-row"><span class="hero-cv-lbl">{{label}}</span><span class="hero-cv-val{{#if tempClass}} {{tempClass}}{{/if}}">{{value}}</span></div>
+            {{/each}}
           </div>
           {{/if}}
         </div>
@@ -96,40 +90,60 @@
       </div>
       <div class="combatant-controls flexrow">
         <div class="hero-status-toggles">
+          {{#if lightningReflexes}}
+          <span class="hero-passive-badge hero-passive-lr" title="{{lightningReflexes.tooltip}}">{{lightningReflexes.shortLabel}}</span>
+          {{/if}}
           {{#each quickStatuses}}
+          {{#if showInTracker}}
           <a class="hero-status-btn{{#if active}} active{{/if}}{{#unless canToggle}} read-only{{/unless}}"
              data-token-id="{{../id}}" data-status-id="{{id}}" title="{{label}}{{#if flashPoints}} — {{flashPoints}} FP remaining (right-click to manage){{/if}}">
             <img src="{{icon}}" width="14" height="14"/>
             {{#if flashPoints}}<span class="hero-fp-badge">{{flashPoints}}</span>{{/if}}
           </a>
+          {{/if}}
           {{/each}}
           {{#each effects}}
           <img class="hero-effect-icon" src="{{icon}}" title="{{label}}" width="14" height="14"/>
           {{/each}}
           {{#each adjustments}}
-          <span class="hero-adjustment-badge hero-adj-{{type}}"
+              <span class="hero-adjustment-badge hero-adj-{{type}}{{#unless canManage}} read-only{{/unless}}"
                 data-token-id="{{../id}}" data-adj-id="{{id}}"
-                title="{{type}} {{char}}: {{points}} pts remaining (fades {{fadeRate}}/{{fadeUnitLabel}}) — right-click to manage">
+                title="{{type}} {{char}}: {{points}} pts remaining (fades {{fadeRate}}/{{fadeUnitLabel}}){{#if canManage}} — right-click to manage{{else}} — unavailable for current user{{/if}}"
+                aria-disabled="{{#unless canManage}}true{{else}}false{{/unless}}">
             {{#if isDrain}}D{{else}}A{{/if}}:{{char}} {{points}}
           </span>
           {{/each}}
           {{#if entangleBody}}
-          <span class="hero-adjustment-badge hero-adj-entangle hero-entangle-badge"
+              <span class="hero-adjustment-badge hero-adj-entangle hero-entangle-badge{{#unless canManageTurnEffects}} read-only{{/unless}}"
                 data-token-id="{{id}}"
-                title="Entangle BODY: {{entangleBody}} remaining — right-click to manage">
+                title="Entangle BODY: {{entangleBody}} remaining{{#if canManageTurnEffects}} — right-click to manage{{else}} — unavailable for current user{{/if}}"
+                aria-disabled="{{#unless canManageTurnEffects}}true{{else}}false{{/unless}}">
             ENT {{entangleBody}}
           </span>
           {{/if}}
-          {{#if isGM}}
-          <a class="hero-add-adjustment hero-tracker-btn" data-token-id="{{id}}" title="Track Drain or Aid">
+              <a class="hero-add-adjustment hero-tracker-btn{{#unless canManageTurnEffects}} disabled{{/unless}}" data-token-id="{{id}}" title="Track Drain or Aid{{#unless canManageTurnEffects}} (Unavailable for current user){{/unless}}" aria-disabled="{{#unless canManageTurnEffects}}true{{else}}false{{/unless}}">
             <i class="fas fa-plus-minus"></i>
           </a>
-          {{/if}}
           <a class="hero-cover-btn{{#if coverDCV}} active{{/if}}{{#unless canToggleCover}} read-only{{/unless}}"
              data-token-id="{{id}}"
-             title="Cover — {{coverStageLabel}}{{#if coverDCV}} (+{{coverDCV}} DCV){{/if}} (left-click cycles None, Some, Half, Good; right-click sets directly)">
+            title="Cover — {{coverStageLabel}}{{#if coverDCV}} (+{{coverDCV}} DCV){{/if}}{{#if canToggleCover}} (left-click cycles None, Low, Medium, High; right-click sets directly){{else}} (Unavailable for current user){{/if}}"
+             aria-disabled="{{#unless canToggleCover}}true{{else}}false{{/unless}}">
             <i class="fas fa-shield-alt"></i>
             {{#if coverDCV}}<span class="hero-cover-badge">+{{coverDCV}}</span>{{/if}}
+          </a>
+          <a class="hero-cover-btn hero-ocv-btn{{#if ocvBonus}} active{{/if}}{{#unless canToggleOcvBonus}} read-only{{/unless}}"
+             data-token-id="{{id}}"
+            title="OCV Bonus — {{ocvStageLabel}}{{#if ocvBonus}} (+{{ocvBonus}} OCV){{/if}}{{#if canToggleOcvBonus}} (left-click cycles None, Low, Medium, High; right-click sets directly){{else}} (Unavailable for current user){{/if}}"
+             aria-disabled="{{#unless canToggleOcvBonus}}true{{else}}false{{/unless}}">
+            <i class="fas fa-crosshairs"></i>
+            {{#if ocvBonus}}<span class="hero-ocv-badge">+{{ocvBonus}}</span>{{/if}}
+          </a>
+          <a class="hero-cover-btn hero-mcv-btn{{#if mcvBonus}} active{{/if}}{{#unless canToggleMcvBonus}} read-only{{/unless}}"
+             data-token-id="{{id}}"
+            title="MCV Bonus — {{mcvStageLabel}}{{#if mcvBonus}} (+{{mcvBonus}} MCV){{/if}}{{#if canToggleMcvBonus}} (left-click cycles None, Low, Medium, High; right-click sets directly){{else}} (Unavailable for current user){{/if}}"
+             aria-disabled="{{#unless canToggleMcvBonus}}true{{else}}false{{/unless}}">
+            <i class="fas fa-brain"></i>
+            {{#if mcvBonus}}<span class="hero-mcv-badge">+{{mcvBonus}}</span>{{/if}}
           </a>
         </div>
         <span class="hero-ctrl-sep"></span>
@@ -139,34 +153,32 @@
         <a class="combatant-control hero-pan-token" data-token-id="{{id}}" title="Pan to Token">
           <i class="fas fa-location-arrow"></i>
         </a>
-        {{#if allowHold}}
-        <a class="combatant-control hero-hold-token" data-token-id="{{id}}" title="Declare Hold — skip phase, act later">
+        {{#if showHold}}
+        <a class="combatant-control hero-hold-token{{#unless allowHold}} disabled{{/unless}}" data-token-id="{{id}}" title="Declare Hold — skip phase, act later{{#unless allowHold}} (Unavailable for current user){{/unless}}" aria-disabled="{{#unless allowHold}}true{{else}}false{{/unless}}">
           <i class="fas fa-hand"></i>
         </a>
         {{/if}}
-        {{#if allowRelease}}
-        <a class="combatant-control hero-release-hold active" data-token-id="{{id}}" title="Release Hold — act now">
+        {{#if showRelease}}
+        <a class="combatant-control hero-release-hold active{{#unless allowRelease}} disabled{{/unless}}" data-token-id="{{id}}" title="Release Hold — act now{{#unless allowRelease}} (Unavailable for current user){{/unless}}" aria-disabled="{{#unless allowRelease}}true{{else}}false{{/unless}}">
           <i class="fas fa-hand"></i>
         </a>
         {{/if}}
-        {{#if allowAbort}}
-        <a class="combatant-control hero-abort-token{{#if isAborted}} active{{/if}}" data-token-id="{{id}}" title="{{#if isAborted}}Cancel Abort{{else}}Declare Abort{{/if}}">
+        {{#if showAbort}}
+        <a class="combatant-control hero-abort-token{{#if isAborted}} active{{/if}}{{#unless allowAbort}} disabled{{/unless}}" data-token-id="{{id}}" title="{{#if isAborted}}Cancel Abort{{else}}Declare Abort{{/if}}{{#unless allowAbort}} (Unavailable for current user){{/unless}}" aria-disabled="{{#unless allowAbort}}true{{else}}false{{/unless}}">
           <i class="fas fa-bolt"></i>
         </a>
         {{/if}}
-        {{#if allowEndTurn}}
-        <a class="combatant-control hero-take-recovery" data-token-id="{{id}}" title="Take Recovery &amp; End Turn">
+        {{#if showEndTurn}}
+        <a class="combatant-control hero-take-recovery{{#unless allowEndTurn}} disabled{{/unless}}" data-token-id="{{id}}" title="Take Recovery &amp; End Turn{{#unless allowEndTurn}} (Unavailable for current user){{/unless}}" aria-disabled="{{#unless allowEndTurn}}true{{else}}false{{/unless}}">
           <i class="fas fa-heart-pulse"></i>
         </a>
-        <a class="combatant-control hero-end-segment" data-token-id="{{id}}" title="End Turn">
+        <a class="combatant-control hero-end-segment{{#unless allowEndTurn}} disabled{{/unless}}" data-token-id="{{id}}" title="End Turn{{#unless allowEndTurn}} (Unavailable for current user){{/unless}}" aria-disabled="{{#unless allowEndTurn}}true{{else}}false{{/unless}}">
           <i class="fas fa-check"></i>
         </a>
         {{/if}}
-        {{#if allowRemove}}
-        <a class="combatant-control hero-remove-combatant" data-token-id="{{id}}" title="Remove from Combat">
+        <a class="combatant-control hero-remove-combatant{{#unless allowRemove}} disabled{{/unless}}" data-token-id="{{id}}" title="Remove from Combat{{#unless allowRemove}} (Unavailable for current user){{/unless}}" aria-disabled="{{#unless allowRemove}}true{{else}}false{{/unless}}">
           <i class="fas fa-trash"></i>
         </a>
-        {{/if}}
       </div>
     </li>
     {{/each}}

@@ -227,6 +227,34 @@
   text-shadow: 0 0 6px var(--color-shadow-primary, #ff6400);
 }
 
+.hero-tracker-btn.disabled,
+.hero-status-btn.read-only,
+.hero-cover-btn.read-only,
+#hero-combat-tracker .combatant-control.disabled,
+.hero-adjustment-badge.read-only,
+.hero-cv-stack.read-only {
+  cursor: not-allowed;
+  opacity: 0.4;
+  box-shadow: none;
+}
+
+.hero-tracker-btn.disabled,
+#hero-combat-tracker .combatant-control.disabled {
+  pointer-events: none;
+  text-shadow: none;
+  color: var(--color-text-dark-secondary, #777);
+}
+
+.hero-adjustment-badge.read-only,
+.hero-cv-stack.read-only {
+  pointer-events: none;
+}
+
+.hero-cv-stack.read-only:hover {
+  background: transparent;
+  border-color: transparent;
+}
+
 /* GM controls row beneath the header */
 .hero-gm-controls {
   padding: 1px 3px;
@@ -366,14 +394,18 @@
   font-size: 0.62em;
   font-weight: 700;
   color: var(--color-text-dark-primary, #444);
+  width: 100%;
+  align-items: stretch;
   min-width: 12px;
   text-align: right;
 }
-
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
 .hero-cv-val.temp-mod {
   color: #b05f00;
   text-shadow: 0 0 3px rgba(255, 128, 0, 0.32);
 }
+  width: 100%;
 
 .hero-cv-val.temp-buff {
   color: #1d7f3b;
@@ -474,6 +506,30 @@
   flex-shrink: 0;
 }
 
+.hero-passive-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: 2px;
+  border: 1px solid rgba(126, 87, 194, 0.45);
+  background: rgba(126, 87, 194, 0.14);
+  color: #5b3a9c;
+  font-size: 0.64em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: help;
+  white-space: nowrap;
+}
+
+.hero-passive-lr {
+  border-color: rgba(30, 136, 229, 0.45);
+  background: rgba(30, 136, 229, 0.14);
+  color: #175c9e;
+}
+
 .hero-status-btn {
   display: inline-flex;
   align-items: center;
@@ -543,7 +599,7 @@
 }
 
 .hero-status-btn.read-only {
-  cursor: default;
+  cursor: not-allowed;
   pointer-events: none;
 }
 
@@ -586,7 +642,7 @@
 }
 
 .hero-cover-btn.read-only {
-  cursor: default;
+  cursor: not-allowed;
   pointer-events: none;
 }
 
@@ -598,6 +654,60 @@
   font-weight: 700;
   line-height: 1;
   background: #4682b4;
+  color: #fff;
+  border-radius: 3px;
+  padding: 0 2px;
+  pointer-events: none;
+}
+
+.hero-ocv-btn:hover:not(.read-only) {
+  background: rgba(255, 140, 0, 0.14);
+  border-color: #d07900;
+  color: #7a4b00;
+}
+
+.hero-ocv-btn.active {
+  background: rgba(255, 140, 0, 0.26);
+  border-color: #d07900;
+  box-shadow: 0 0 4px rgba(255, 140, 0, 0.45);
+  color: #7a4b00;
+}
+
+.hero-ocv-badge {
+  position: absolute;
+  bottom: -3px;
+  right: -3px;
+  font-size: 0.58em;
+  font-weight: 700;
+  line-height: 1;
+  background: #d07900;
+  color: #fff;
+  border-radius: 3px;
+  padding: 0 2px;
+  pointer-events: none;
+}
+
+.hero-mcv-btn:hover:not(.read-only) {
+  background: rgba(46, 95, 133, 0.14);
+  border-color: #2e5f85;
+  color: #1f425f;
+}
+
+.hero-mcv-btn.active {
+  background: rgba(46, 95, 133, 0.26);
+  border-color: #2e5f85;
+  box-shadow: 0 0 4px rgba(46, 95, 133, 0.45);
+  color: #1f425f;
+}
+
+.hero-mcv-badge {
+  position: absolute;
+  bottom: -3px;
+  right: -3px;
+  font-size: 0.58em;
+  font-weight: 700;
+  line-height: 1;
+  background: #2e5f85;
   color: #fff;
   border-radius: 3px;
   padding: 0 2px;
@@ -649,6 +759,13 @@
   color: #fff;
 }
 #hero-combat-tracker .hero-release-hold:hover i { color: #fff; }
+
+#hero-combat-tracker .hero-release-hold.disabled,
+#hero-combat-tracker .hero-release-hold.disabled i,
+#hero-combat-tracker .hero-abort-token.disabled,
+#hero-combat-tracker .hero-abort-token.disabled i {
+  color: inherit;
+}
 
 /* Abort active tint */
 #hero-combat-tracker .hero-abort-token.active {
