@@ -542,6 +542,11 @@ Hooks.once("ready", async () => {
       if (game.heroCombat.heroControllerPanel) {
         await game.heroCombat.heroControllerPanel._toggleAbort(data.tokenId);
       }
+    } else if (data.type === "my-turn" && game.user.isGM) {
+      if (data.userId && !userOwnsToken(data.userId, data.tokenId)) return;
+      if (game.heroCombat.heroControllerPanel) {
+        await game.heroCombat.heroControllerPanel._insertTokenAtFront(data.tokenId);
+      }
     } else if (data.type === "highlight-acting" && game.user.isGM) {
       if (game.heroCombat?.highlightActing) await game.heroCombat.highlightActing();
     } else if (data.type === "refresh-order" && game.user.isGM) {

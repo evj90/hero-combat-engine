@@ -795,6 +795,17 @@ export class HeroControllerPanel extends Application {
       if (token?.actor) token.actor.sheet.render(true);
     });
 
+    html.find(".token-image").on("contextmenu", async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
+      e.preventDefault();
+      const tokenId = e.currentTarget.closest('[data-token-id]').dataset.tokenId;
+      if (canDirectlyUpdateScene()) {
+        await this._insertTokenAtFront(tokenId);
+      } else {
+        emitCombatSocket("my-turn", { tokenId });
+      }
+    });
+
     html.find(".hero-end-segment").click(async (e) => {
       if (isDisabledControl(e.currentTarget)) return;
       e.preventDefault();
@@ -2333,5 +2344,38 @@ export class HeroControllerPanel extends Application {
     const aborted = canvas.scene.getFlag("hero-combat-engine", "hero-combat.abortedTokens") ?? [];
     const newAborted = aborted.includes(tokenId) ? aborted.filter(id => id !== tokenId) : [...aborted, tokenId];
     await canvas.scene.setFlag("hero-combat-engine", "hero-combat.abortedTokens", newAborted);
+  }
+
+  async _insertTokenAtFront(tokenId) {
+    if (!canvas?.scene) return;
+    const segment = canvas.scene.getFlag("hero-combat-engine", "heroSegment") ?? 1;
+    const phase = canvas.scene.getFlag("hero-combat-engine", "heroPhase") ?? 1;
+
+    // Get the token to insert
+    const tokenToInsert = canvas.tokens.get(tokenId);
+    if (!tokenToInsert) return;
+
+    // Get the acting tokens for this segment
+    const actingTokens = getActingTokens(segment);
+    
+    // Remove the token from its natural position (if in list)
+    const withoutToken = actingTokens.filter(t => t.id !== tokenId);
+    
+    // Insert at the front
+    withoutToken.unshift(tokenToInsert);
+    
+    // Write a per-segment acting override so only this segment's order is affected
+    await canvas.scene.setFlag("hero-combat-engine", "hero-combat.segmentOverride", withoutToken.map(t => t.id));
+    
+    // Set index to 0 (the inserted token now acts first)
+    await canvas.scene.setFlag("hero-combat-engine", "heroCurrentActingIndex", 0);
+    
+    // Post chat message if enabled
+    if (game.settings.get("hero-combat-engine", "chatTokenTurns")) {
+      createCombatChatMessage(`<strong>${tokenToInsert.name}</strong> takes their turn now.`, phase, segment);
+    }
+    
+    // Refresh the tracker UI to show the new order
+    await this.render(true);
   }
 }
