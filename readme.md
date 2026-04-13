@@ -161,6 +161,22 @@ The settings menu covers four main areas:
 - Settings menu for tracker, chat, recovery, and visuals
 - Bundled macro compendium for common combat actions
 
+## Macro Development Workflow
+
+Develop macro logic in source files and expose them automatically:
+
+1. Add macro scripts under `scripts/macros/`.
+2. Run `node tools/build-macro-registry.mjs`.
+3. Reload Foundry.
+4. Call by name with `await game.heroCombat.runRegisteredMacro("macro-name")`.
+5. Or run **Run Registered HERO Macro** from the module macro compendium to pick from a list.
+
+File names become macro names:
+- `scripts/macros/my-macro.js` -> `"my-macro"`
+- `scripts/macros/gm/end-turn.js` -> `"gm/end-turn"`
+
+The generated loader file is `scripts/macro-registry.generated.js`.
+
 ## Contributing
 
 Interested in improving the HERO Combat Engine? Contributors are welcome!

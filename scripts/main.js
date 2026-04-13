@@ -6,6 +6,7 @@ import { highlightActing, registerHighlightSocketListener, clearHighlights } fro
 import { endCombat } from "./end-combat.js";
 import { SPD_MAP } from "./spd-map.js";
 import { runMentalIllusionMacro, registerMentalIllusionChatHandlers } from "./mental-illusion-macro.js";
+import { macroRegistry, runRegisteredMacro } from "./macro-registry.generated.js";
 
 Hooks.once("init", () => {
   game.heroCombat = game.heroCombat || {};
@@ -408,6 +409,51 @@ Hooks.once("ready", async () => {
   game.heroCombat.holdToken = holdToken;
   game.heroCombat.releaseHold = releaseHold;
   game.heroCombat.runMentalIllusionMacro = runMentalIllusionMacro;
+  game.heroCombat.macros = macroRegistry;
+  game.heroCombat.runRegisteredMacro = runRegisteredMacro;
+  game.heroCombat.openRegisteredMacroDialog = async function() {
+    const names = Object.keys(game.heroCombat.macros ?? {}).sort((a, b) => a.localeCompare(b));
+    if (!names.length) {
+      ui.notifications.warn("No registered HERO macro scripts were found. Add files under scripts/macros and rebuild the registry.");
+      return;
+    }
+
+    const options = names.map(name => `<option value="${name}">${name}</option>`).join("");
+    const selected = await new Promise(resolve => {
+      new Dialog({
+        title: "Run Registered HERO Macro",
+        content: `
+          <form>
+            <div class="form-group">
+              <label>Macro Script</label>
+              <select id="hero-macro-picker">${options}</select>
+            </div>
+          </form>
+        `,
+        buttons: {
+          run: {
+            icon: '<i class="fas fa-play"></i>',
+            label: "Run",
+            callback: html => resolve(String(html.find("#hero-macro-picker").val() ?? "").trim())
+          },
+          cancel: {
+            label: "Cancel",
+            callback: () => resolve(null)
+          }
+        },
+        default: "run"
+      }).render(true);
+    });
+
+    if (!selected) return;
+
+    try {
+      await game.heroCombat.runRegisteredMacro(selected);
+    } catch (err) {
+      console.error("HERO Combat Engine | registered macro failed:", selected, err);
+      ui.notifications.error(`Registered macro failed: ${selected}`);
+    }
+  };
 
   // Add a button to the left sidebar
   Hooks.on("getSceneControlButtons", controls => {

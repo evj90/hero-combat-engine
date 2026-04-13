@@ -5,3 +5,4 @@
 {"_id":"HeroNextToken001","name":"Next Acting Token","type":"script","scope":"global","command":"game.heroCombat.nextActingToken();","img":"icons/svg/forward.svg","flags":{}}
 {"_id":"HeroPrevToken001","name":"Previous Acting Token","type":"script","scope":"global","command":"game.heroCombat.previousActingToken();","img":"icons/svg/back.svg","flags":{}}
 {"_id":"HeroMindIllu01","name":"Mental Illusion Attack","type":"script","scope":"global","command":"game.heroCombat.runMentalIllusionMacro();","img":"icons/magic/control/fear-fright-monster-grin-blue.webp","flags":{}}
+{"_id":"HeroRunRegMac01","name":"Run Registered HERO Macro","type":"script","scope":"global","command":"game.heroCombat.openRegisteredMacroDialog();","img":"icons/svg/dice-target.svg","flags":{}}

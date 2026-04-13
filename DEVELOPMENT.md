@@ -151,6 +151,30 @@ Visual indicators for acting tokens:
 3. Update `controller-panel.html` template `combatValueRows` loop
 4. Style with `hero-panel.css` `.hero-cv-*` classes
 
+### Add Macros From Repo Files
+Use this workflow to develop macros directly in source control instead of writing large scripts in the Foundry macro editor.
+
+1. Add a JavaScript file under `scripts/macros/` (nested folders are supported).
+2. Export one entry function from the file: `run(...)`, `default (...)`, or `execute(...)`.
+3. Regenerate the static loader:
+
+```bash
+node tools/build-macro-registry.mjs
+```
+
+4. Reload the world/module in Foundry.
+5. Call the macro by name:
+
+```javascript
+await game.heroCombat.runRegisteredMacro("your-macro-name")
+```
+
+Name mapping rules:
+- `scripts/macros/foo.js` -> `"foo"`
+- `scripts/macros/control/end-turn.js` -> `"control/end-turn"`
+
+The generated file is `scripts/macro-registry.generated.js` and should be committed.
+
 ### Change Combat State Flags
 1. Update read/write locations consistently across all files
 2. Flag keys are stored as literal strings: `"hero-combat.actingOrder"` not nested
