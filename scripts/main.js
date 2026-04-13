@@ -7,6 +7,7 @@ import { endCombat } from "./end-combat.js";
 import { SPD_MAP } from "./spd-map.js";
 import { runMentalIllusionMacro, registerMentalIllusionChatHandlers } from "./mental-illusion-macro.js";
 import { macroRegistry, runRegisteredMacro } from "./macro-registry.generated.js";
+import { registerAttackSheetTooltips } from "./attack-sheet-tooltips.js";
 
 Hooks.once("init", () => {
   game.heroCombat = game.heroCombat || {};
@@ -375,6 +376,7 @@ Hooks.once("init", () => {
 
 Hooks.once("ready", async () => {
   registerMentalIllusionChatHandlers();
+  registerAttackSheetTooltips();
 
   // Load bucket descriptions from editable JSON file in the module folder.
   try {
