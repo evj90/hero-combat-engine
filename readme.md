@@ -1,5 +1,9 @@
 ﻿# HERO Combat Engine
 
+[![GitHub Issues](https://img.shields.io/github/issues/evj90/hero-combat-engine)](https://github.com/evj90/hero-combat-engine/issues)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Latest Release](https://img.shields.io/github/v/release/evj90/hero-combat-engine)](https://github.com/evj90/hero-combat-engine/releases)
+
 An unofficial Foundry VTT v11 module for running HERO System combat with a 12-segment, phase-based tracker instead of Foundry's standard turn order.
 
 The module keeps combat state on scene flags, provides a floating controller panel for the table, and adds HERO-specific tools like Hold, Abort, pip-based stat bars, and segment-aware token highlighting.
@@ -26,17 +30,35 @@ The module keeps combat state on scene flags, provides a floating controller pan
 
 ## Installation
 
-Install through Foundry using this manifest URL:
+### Foundry VTT (self-hosted)
 
-```text
-https://raw.githubusercontent.com/evj90/hero-combat-engine/main/module.json
-```
+1. Open **Configuration → Module Management → Install Module**.
+2. Paste a manifest URL from the table below into the **Manifest URL** field and click **Install**.
 
-Direct download:
+| Branch | Purpose | Manifest URL |
+|--------|---------|--------------|
+| `main` | Stable releases | `https://raw.githubusercontent.com/evj90/hero-combat-engine/main/module.json` |
+| `develop` | Latest in-progress work | `https://raw.githubusercontent.com/evj90/hero-combat-engine/develop/module.json` |
 
-```text
-https://github.com/evj90/hero-combat-engine/archive/refs/heads/main.zip
-```
+### The Forge
+
+1. Log in and open your game's **Module Management** page from the Forge dashboard.
+2. Click **Install Module (from Manifest URL)**.
+3. Paste the manifest URL for the branch you want and confirm.
+
+| Branch | Purpose | Manifest URL |
+|--------|---------|--------------|
+| `main` | Stable releases | `https://raw.githubusercontent.com/evj90/hero-combat-engine/main/module.json` |
+| `develop` | Latest in-progress work | `https://raw.githubusercontent.com/evj90/hero-combat-engine/develop/module.json` |
+
+### Manual / Direct Download
+
+Download a ZIP and unpack it into your Foundry `Data/modules/` folder (the unpacked folder must be named `hero-combat-engine`).
+
+| Branch | Download |
+|--------|----------|
+| `main` | `https://github.com/evj90/hero-combat-engine/archive/refs/heads/main.zip` |
+| `develop` | `https://github.com/evj90/hero-combat-engine/archive/refs/heads/develop.zip` |
 
 ## Quick Start
 
@@ -67,20 +89,22 @@ https://github.com/evj90/hero-combat-engine/archive/refs/heads/main.zip
 ### Per-Combatant Controls
 
 - **Ping** and **Pan** jump the table to a token quickly.
-- **Cover** cycles temporary DCV bonus stages, with right-click direct set.
-- **OCV Bonus** cycles temporary OCV bonus stages, with right-click direct set.
+- **Cover** cycles temporary DCV bonus stages, with right-click direct set (right-click indicators shown as blue dots).
+- **OCV Bonus** cycles temporary OCV bonus stages, with right-click direct set (right-click indicators shown as blue dots).
+- **MCV Bonus** cycles temporary MCV bonus stages, with right-click direct set (right-click indicators shown as blue dots).
+- **Drain / Aid badges** track active adjustments with right-click management (right-click indicators shown as blue dots).
 - **Hold** removes a token from its current place so it can act later in the segment.
 - **Release Hold** inserts that held token immediately after the current acting token.
 - **Abort** marks a token as aborting before it acts.
-- **Recovery** takes recovery and ends the token's turn.
-- **Done** ends the token's turn normally.
+- **Recovery** takes recovery and ends the token's turn (highlighted as primary action).
+- **Done** ends the token's turn normally (highlighted as primary action).
 - **Remove from Combat** removes that token from the encounter.
 
 ## Tracker Features
 
 ### Combat Readout
 
-- Current segment display in `phase.segment` format.
+- Current segment display in `phase.segment` format with the acting token's name.
 - SPD values acting in the current segment.
 - Combatants sorted in HERO-friendly order.
 - Optional SPD column in the tracker.
@@ -109,10 +133,18 @@ https://github.com/evj90/hero-combat-engine/archive/refs/heads/main.zip
 
 The settings menu covers four main areas:
 
-- **Tracker behavior**: auto-open for players, auto-close on combat end, SPD column visibility, tracked pip characteristics, combat value characteristics, hide non-acting tokens, and accessibility sizing.
+- **Tracker behavior**: auto-open for players, auto-close on combat end, SPD column visibility, tracked pip characteristics with live preview, combat value characteristics with live preview, hide non-acting tokens, and accessibility sizing.
 - **Turn management**: player turn-ending permissions, skip warnings (including held-token loss warnings), automatic empty-segment skipping, incapacitated-token skipping, and DEX tie-break behavior.
 - **Visuals**: active highlight colors, incapacitated colors, burst settings, ring width, inset, glow radius, and glow intensity.
 - **Recovery and chat output**: token turn messages, segment summaries, skipped segment notices, post-segment 12 recovery messages, and configurable STUN/BODY recovery thresholds.
+
+## Accessibility
+
+- All interactive buttons include semantic `role` attributes and `aria-label` text for screen readers.
+- Right-clickable elements display small blue indicator dots for feature discovery.
+- Primary actions (End Turn, Take Recovery) are visually highlighted in green.
+- Settings inputs for characteristics show live preview of parsed results as you type.
+- Non-GM players see appropriate UI messaging (e.g., "Waiting for the GM to start combat") instead of disabled buttons.
 
 ## Usage Notes
 
@@ -128,6 +160,15 @@ The settings menu covers four main areas:
 - Highlight and segment timing engine
 - Settings menu for tracker, chat, recovery, and visuals
 - Bundled macro compendium for common combat actions
+
+## Contributing
+
+Interested in improving the HERO Combat Engine? Contributors are welcome!
+
+- **[Contributing Guide](CONTRIBUTING.md)** — How to submit bugs, features, and pull requests
+- **[Development Guide](DEVELOPMENT.md)** — How to set up your development environment
+- **[Issues](https://github.com/evj90/hero-combat-engine/issues)** — Report bugs or suggest features
+- **License** — This project is licensed under MIT
 
 ## Version
 

@@ -148,17 +148,15 @@ export async function endCombat() {
   await clearHighlights();
   await clearAllTemporaryCVMods();
 
-  // Clear all combat state in a single server round-trip.
+  // Clear all combat state using the same literal keys used by setFlag/getFlag.
   heroLog("Clearing all hero-combat-engine scene flags");
-  await canvas.scene.update({
-    "flags.hero-combat-engine.-=heroSegment":                    null,
-    "flags.hero-combat-engine.-=heroPhase":                      null,
-    "flags.hero-combat-engine.-=heroCurrentActingIndex":         null,
-    "flags.hero-combat-engine.hero-combat.-=actingOrder":        null,
-    "flags.hero-combat-engine.hero-combat.-=heldTokens":         null,
-    "flags.hero-combat-engine.hero-combat.-=abortedTokens":      null,
-    "flags.hero-combat-engine.hero-combat.-=segmentOverride":    null,
-  });
+  await canvas.scene.unsetFlag("hero-combat-engine", "heroSegment");
+  await canvas.scene.unsetFlag("hero-combat-engine", "heroPhase");
+  await canvas.scene.unsetFlag("hero-combat-engine", "heroCurrentActingIndex");
+  await canvas.scene.unsetFlag("hero-combat-engine", "hero-combat.actingOrder");
+  await canvas.scene.unsetFlag("hero-combat-engine", "hero-combat.heldTokens");
+  await canvas.scene.unsetFlag("hero-combat-engine", "hero-combat.abortedTokens");
+  await canvas.scene.unsetFlag("hero-combat-engine", "hero-combat.segmentOverride");
 
   ChatMessage.create({
     speaker: combatEngineSpeaker(phase, segment),

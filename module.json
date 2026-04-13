@@ -15,7 +15,8 @@
 
   "authors": [
     {
-      "name": "Evan"
+      "name": "Evan",
+      "url": "https://github.com/evj90"
     }
   ],
 
@@ -44,6 +45,13 @@
     }
   ],
 
+  "url": "https://github.com/evj90/hero-combat-engine",
+  "bugs": "https://github.com/evj90/hero-combat-engine/issues",
+  "homepage": "https://github.com/evj90/hero-combat-engine",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/evj90/hero-combat-engine.git"
+  },
   "manifest": "https://raw.githubusercontent.com/evj90/hero-combat-engine/main/module.json",
   "download": "https://github.com/evj90/hero-combat-engine/archive/refs/heads/main.zip"
 }

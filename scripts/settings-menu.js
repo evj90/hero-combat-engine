@@ -63,6 +63,26 @@ export class HeroCombatSettingsMenu extends FormApplication {
     };
   }
 
+  activateListeners(html) {
+    super.activateListeners(html);
+    const parseChars = val => val
+      .split(/[,.\s;]+/)
+      .map(s => s.trim().toLowerCase().replace(/[^a-z0-9_]/g, ""))
+      .filter(Boolean);
+    const wirePreview = (inputId, previewId) => {
+      const input = html.find(`#${inputId}`);
+      const preview = html.find(`#${previewId}`);
+      const refresh = () => {
+        const keys = parseChars(input.val() || "");
+        preview.text(keys.length ? "Will show: " + keys.map(k => k.toUpperCase()).join(" · ") : "");
+      };
+      input.on("input", refresh);
+      refresh();
+    };
+    wirePreview("input-tracked-pip", "preview-tracked-pip");
+    wirePreview("input-combat-value", "preview-combat-value");
+  }
+
   async _updateObject(event, formData) {
     const numericKeys = new Set([
       "ringStrokeWidth", "ringInset", "burstDuration",

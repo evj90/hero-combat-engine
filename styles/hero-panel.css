@@ -227,27 +227,26 @@
   text-shadow: 0 0 6px var(--color-shadow-primary, #ff6400);
 }
 
+/* Disabled / read-only: these rules use !important so that .active glows,
+   opacity:1 overrides, and high-specificity selectors cannot make a
+   disabled control appear visually enabled. pointer-events:none ensures
+   all mouse interaction is suppressed regardless of other styles. */
 .hero-tracker-btn.disabled,
 .hero-status-btn.read-only,
 .hero-cover-btn.read-only,
 #hero-combat-tracker .combatant-control.disabled,
 .hero-adjustment-badge.read-only,
 .hero-cv-stack.read-only {
-  cursor: not-allowed;
-  opacity: 0.4;
-  box-shadow: none;
+  cursor: not-allowed !important;
+  opacity: 0.4 !important;
+  box-shadow: none !important;
+  pointer-events: none !important;
 }
 
 .hero-tracker-btn.disabled,
 #hero-combat-tracker .combatant-control.disabled {
-  pointer-events: none;
   text-shadow: none;
   color: var(--color-text-dark-secondary, #777);
-}
-
-.hero-adjustment-badge.read-only,
-.hero-cv-stack.read-only {
-  pointer-events: none;
 }
 
 .hero-cv-stack.read-only:hover {
@@ -358,8 +357,8 @@
 }
 
 .hero-cv-stack {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 1px;
   margin-left: 4px;
   flex-shrink: 0;
@@ -381,6 +380,7 @@
   justify-content: space-between;
   gap: 3px;
   min-width: 44px;
+  width: 100%;
   line-height: 1;
 }
 
@@ -394,18 +394,14 @@
   font-size: 0.62em;
   font-weight: 700;
   color: var(--color-text-dark-primary, #444);
-  width: 100%;
-  align-items: stretch;
   min-width: 12px;
   text-align: right;
 }
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+
 .hero-cv-val.temp-mod {
   color: #b05f00;
   text-shadow: 0 0 3px rgba(255, 128, 0, 0.32);
 }
-  width: 100%;
 
 .hero-cv-val.temp-buff {
   color: #1d7f3b;
@@ -598,11 +594,6 @@
   filter: none;
 }
 
-.hero-status-btn.read-only {
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
 .hero-cover-btn {
   display: inline-flex;
   align-items: center;
@@ -639,11 +630,6 @@
   border-width: 2px;
   box-shadow: 0 0 4px rgba(70, 130, 180, 0.45);
   color: #1f4f74;
-}
-
-.hero-cover-btn.read-only {
-  cursor: not-allowed;
-  pointer-events: none;
 }
 
 .hero-cover-badge {
@@ -942,4 +928,75 @@
 .hero-add-adjustment:hover {
   opacity: 1;
   color: var(--color-border-highlight, #ff6400);
+}
+
+/* ── Right-click context-menu indicator ─────────────────────────── */
+.has-ctx {
+  position: relative;
+}
+
+.has-ctx::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(70, 130, 180, 0.7);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* ── Primary action buttons (End Turn, Take Recovery) ───────────── */
+.combatant-control.hero-primary-action {
+  background: rgba(76, 175, 80, 0.22) !important;
+  border-color: #4caf50 !important;
+  color: #2e7d32 !important;
+  box-shadow: 0 0 4px rgba(76, 175, 80, 0.35);
+}
+
+.combatant-control.hero-primary-action:hover {
+  background: #4caf50 !important;
+  border-color: #4caf50 !important;
+  color: #fff !important;
+  box-shadow: 0 0 7px rgba(76, 175, 80, 0.55) !important;
+  opacity: 1 !important;
+}
+
+/* ── Segment header with acting-token label ─────────────────────── */
+.hero-segment-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 140px;
+  gap: 2px;
+}
+
+.hero-segment-header .encounter-title {
+  margin: 0;
+  line-height: 1.2;
+  width: 100%;
+  white-space: normal;
+}
+
+.hero-acting-label {
+  font-size: 0.64em;
+  color: var(--color-border-highlight, #ff6400);
+  font-style: italic;
+  font-weight: 600;
+  line-height: 1.1;
+  width: 100%;
+  max-width: 100%;
+  overflow: visible;
+  white-space: normal;
+  word-break: break-word;
+}
+
+/* ── Settings: live characteristics preview ─────────────────────── */
+.hero-char-preview {
+  min-height: 1em;
+  font-style: italic;
+  color: var(--color-text-dark-secondary, #888);
 }

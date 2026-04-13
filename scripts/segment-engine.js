@@ -35,6 +35,22 @@ function normalizeCharacteristicKey(key) {
     .replace(/[^a-z0-9_]/g, "");
 }
 
+function getAbsoluteSegmentIndex(phase, segment) {
+  const normalizedPhase = Math.max(1, Number(phase ?? 1));
+  const normalizedSegment = Math.min(12, Math.max(1, Number(segment ?? 1)));
+  return ((normalizedPhase - 1) * 12) + normalizedSegment;
+}
+
+function getCvModifierRemainingSegments(mod, currentPhase, currentSegment) {
+  const expirePhase = Number(mod?.expirePhase);
+  const expireSegment = Number(mod?.expireSegment);
+  if (Number.isFinite(expirePhase) && Number.isFinite(expireSegment)) {
+    const remaining = getAbsoluteSegmentIndex(expirePhase, expireSegment) - getAbsoluteSegmentIndex(currentPhase, currentSegment);
+    return Math.max(0, remaining);
+  }
+  return Math.max(0, Number(mod?.remainingSegments ?? 0));
+}
+
 function getAdjustmentBaseCharacteristicValue(actor, statKey) {
   if (statKey === "mcv") {
     const chars = actor.system?.characteristics ?? {};
@@ -352,6 +368,8 @@ async function cvSegmentModifierTick() {
   if (!canvas?.scene) return;
   const actingOrder = canvas.scene.getFlag("hero-combat-engine", "hero-combat.actingOrder") ?? [];
   const messages = [];
+  const currentSegment = canvas.scene.getFlag("hero-combat-engine", "heroSegment") ?? 1;
+  const currentPhase = canvas.scene.getFlag("hero-combat-engine", "heroPhase") ?? 1;
 
   for (const tokenId of actingOrder) {
     const t = canvas.tokens.get(tokenId);
@@ -365,7 +383,7 @@ async function cvSegmentModifierTick() {
     const revert = {};
 
     for (const mod of mods) {
-      const remaining = Math.max(0, (mod.remainingSegments ?? 1) - 1);
+      const remaining = getCvModifierRemainingSegments(mod, currentPhase, currentSegment);
       const modStats = getCombatValueModsFromEntry(mod);
       if (remaining <= 0) {
         for (const [statKey, delta] of Object.entries(modStats)) {

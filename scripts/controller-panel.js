@@ -316,12 +316,53 @@ function getCombatValueCharacteristics() {
   }
 
   const parsed = raw
-    .split(",")
+    .split(/[,.\s;]+/)
     .map(normalizeCharacteristicKey)
     .filter(Boolean);
 
   const unique = [...new Set(parsed)];
   return unique.length ? unique : ["ocv", "dcv", "mcv"];
+}
+
+function getHideNonActingPreference() {
+  const userValue = game.user?.getFlag("hero-combat-engine", "hideNonActing");
+  if (typeof userValue === "boolean") return userValue;
+  return game.settings.get("hero-combat-engine", "hideNonActing");
+}
+
+async function setHideNonActingPreference(value) {
+  await game.user?.setFlag("hero-combat-engine", "hideNonActing", Boolean(value));
+}
+
+function getAbsoluteSegmentIndex(phase, segment) {
+  const normalizedPhase = Math.max(1, Number(phase ?? 1));
+  const normalizedSegment = Math.min(12, Math.max(1, Number(segment ?? 1)));
+  return ((normalizedPhase - 1) * 12) + normalizedSegment;
+}
+
+function getCvModifierRemainingSegments(mod, currentPhase, currentSegment) {
+  const expirePhase = Number(mod?.expirePhase);
+  const expireSegment = Number(mod?.expireSegment);
+  if (Number.isFinite(expirePhase) && Number.isFinite(expireSegment)) {
+    const remaining = getAbsoluteSegmentIndex(expirePhase, expireSegment) - getAbsoluteSegmentIndex(currentPhase, currentSegment);
+    return Math.max(0, remaining);
+  }
+  return Math.max(0, Number(mod?.remainingSegments ?? 0));
+}
+
+function createCvModifierEntry(statMods, segments, phase, segment) {
+  const duration = Math.max(1, Number(segments ?? 1));
+  const applyIndex = getAbsoluteSegmentIndex(phase, segment);
+  const expireIndex = applyIndex + duration;
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    statMods,
+    remainingSegments: duration,
+    appliedPhase: Number(phase ?? 1),
+    appliedSegment: Number(segment ?? 1),
+    expirePhase: Math.floor((expireIndex - 1) / 12) + 1,
+    expireSegment: ((expireIndex - 1) % 12) + 1
+  };
 }
 
 function getCharacteristicLabel(statKey) {
@@ -389,6 +430,31 @@ function formatCombatValueModParts(statMods, preferredOrder = []) {
     const delta = Number(statMods[statKey] ?? 0);
     return `${getCharacteristicLabel(statKey)} ${delta > 0 ? "+" : ""}${delta}`;
   });
+}
+
+function buildCombatValueTooltip(statKey, cvSegmentMods = [], phase, segment) {
+  const currentIndex = getAbsoluteSegmentIndex(phase, segment);
+  const applicableMods = [];
+  
+  for (const mod of cvSegmentMods) {
+    const delta = Number(mod.statMods?.[statKey] ?? 0);
+    if (delta === 0) continue;
+    
+    const modExpireIndex = mod.expirePhase ? getAbsoluteSegmentIndex(mod.expirePhase, mod.expireSegment) : currentIndex;
+    const remaining = Math.max(0, modExpireIndex - currentIndex);
+    
+    if (remaining > 0) {
+      const sign = delta > 0 ? "+" : "";
+      const durationLabel = remaining === 1 ? "1 segment" : `${remaining} segments`;
+      applicableMods.push(`${sign}${delta} (${durationLabel})`);
+    }
+  }
+  
+  if (applicableMods.length === 0) {
+    return undefined;
+  }
+  
+  return `Applied modifiers: ${applicableMods.join(", ")}`;
 }
 
 function getRevertDeltaMapForCvMods(activeMods = []) {
@@ -504,7 +570,7 @@ export class HeroControllerPanel extends Application {
     const trackedPipCharacteristics = getTrackedPipCharacteristics();
     const combatValueCharacteristics = getCombatValueCharacteristics();
     const playerSelfAdvance = game.settings.get("hero-combat-engine", "playerSelfAdvance");
-    const hideNonActing = game.settings.get("hero-combat-engine", "hideNonActing");
+    const hideNonActing = getHideNonActingPreference();
 
     // Read stat config once — passed into statBucket to avoid N×6 settings reads per render
     const statConfig = {
@@ -531,6 +597,8 @@ export class HeroControllerPanel extends Application {
     // Tokens that act this segment, in turn order — used to determine "already acted"
     const actingThisSegment = getActingTokens(segment).map(t => t.id);
     const currentActingTokenId = actingThisSegment[currentActingIndex] ?? null;
+    const currentActingToken = currentActingTokenId ? canvas.tokens.get(currentActingTokenId) : null;
+    const currentActingTokenName = currentActingToken?.name ?? null;
     const alreadyActedIds = new Set(actingThisSegment.slice(0, currentActingIndex));
 
     const allCombatants = actingOrder.map(tokenId => {
@@ -611,7 +679,8 @@ export class HeroControllerPanel extends Application {
       const ocvStage = getOcvStage(ocvBonus);
       const mcvBonus = token.document.getFlag("hero-combat-engine", "mcvBonus") ?? 0;
       const mcvStage = getMcvStage(mcvBonus);
-      const cvMods = sumCombatValueMods(token.document.getFlag("hero-combat-engine", "cvSegmentMods") ?? []);
+      const cvSegmentMods = token.document.getFlag("hero-combat-engine", "cvSegmentMods") ?? [];
+      const cvMods = sumCombatValueMods(cvSegmentMods);
       const lightningReflexes = getLightningReflexesIndicator(actor);
       const combatValueRows = combatValueCharacteristics.map(statKey => {
         const tempDelta = Number(cvMods[statKey] ?? 0);
@@ -619,7 +688,8 @@ export class HeroControllerPanel extends Application {
           key: statKey,
           label: getCharacteristicLabel(statKey),
           value: getCharacteristicValue(actor, statKey),
-          tempClass: tempDelta > 0 ? "temp-buff" : (tempDelta < 0 ? "temp-debuff" : "")
+          tempClass: tempDelta > 0 ? "temp-buff" : (tempDelta < 0 ? "temp-debuff" : ""),
+          tooltip: buildCombatValueTooltip(statKey, cvSegmentMods, phase, segment)
         };
       });
 
@@ -698,6 +768,7 @@ export class HeroControllerPanel extends Application {
       combatants,
       hasCombatants: allCombatants.length > 0,
       currentActingTokenId,
+      currentActingTokenName,
       staleCount,
       hasStaleTokens: staleCount > 0,
       stalePlural: staleCount !== 1
@@ -864,8 +935,8 @@ export class HeroControllerPanel extends Application {
 
     html.find("#hero-toggle-hide-non-acting").click(async (e) => {
       e.preventDefault();
-      const current = game.settings.get("hero-combat-engine", "hideNonActing");
-      await game.settings.set("hero-combat-engine", "hideNonActing", !current);
+      const current = getHideNonActingPreference();
+      await setHideNonActingPreference(!current);
       await this.render(true);
     });
 
@@ -2011,10 +2082,18 @@ export class HeroControllerPanel extends Application {
 
     const configuredStats = getCombatValueCharacteristics();
     const activeMods = token.document.getFlag("hero-combat-engine", "cvSegmentMods") ?? [];
+    const currentPhase = canvas.scene.getFlag("hero-combat-engine", "heroPhase") ?? 1;
+    const currentSegment = canvas.scene.getFlag("hero-combat-engine", "heroSegment") ?? 1;
     const activeSummary = activeMods.length
       ? activeMods.map(m => {
         const parts = formatCombatValueModParts(getCombatValueModsFromEntry(m), configuredStats);
-        return `${parts.join(", ")} (${m.remainingSegments} segment${m.remainingSegments === 1 ? "" : "s"} left)`;
+        const remainingSegments = getCvModifierRemainingSegments(m, currentPhase, currentSegment);
+        const appliedPhase = Number(m.appliedPhase);
+        const appliedSegment = Number(m.appliedSegment);
+        const timingSuffix = Number.isFinite(appliedPhase) && Number.isFinite(appliedSegment)
+          ? `, applied ${appliedPhase}.${appliedSegment}`
+          : "";
+        return `${parts.join(", ")} (${remainingSegments} segment${remainingSegments === 1 ? "" : "s"} left${timingSuffix})`;
       }).join("<br>")
       : "None";
 
@@ -2114,11 +2193,7 @@ export class HeroControllerPanel extends Application {
     }
     await actor.update(updates);
 
-    const newEntry = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      statMods: result.statMods,
-      remainingSegments: segments
-    };
+    const newEntry = createCvModifierEntry(result.statMods, segments, phase, segment);
 
     await token.document.setFlag("hero-combat-engine", "cvSegmentMods", [...activeMods, newEntry]);
 
