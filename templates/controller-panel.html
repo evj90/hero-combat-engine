@@ -117,7 +117,7 @@
           {{#each adjustments}}
               <span class="hero-adjustment-badge hero-adj-{{type}}{{#unless canManage}} read-only{{else}} has-ctx{{/unless}}"
                 data-token-id="{{../id}}" data-adj-id="{{id}}"
-                title="{{type}} {{char}}: {{points}} pts remaining (fades {{fadeRate}}/{{fadeUnitLabel}}){{#if canManage}} — right-click to manage{{else}} — unavailable for current user{{/if}}"
+                title="{{tooltip}}{{#if canManage}} — right-click to manage{{else}} — unavailable for current user{{/if}}"
                 aria-disabled="{{#unless canManage}}true{{else}}false{{/unless}}">
             {{#if isDrain}}Drain{{else}}Aid{{/if}}:{{char}} {{points}}
           </span>

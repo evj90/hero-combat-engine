@@ -432,6 +432,18 @@ function formatCombatValueModParts(statMods, preferredOrder = []) {
   });
 }
 
+function buildAdjustmentTooltip(adj) {
+  const typeLabel = adj.type === "drain" ? "Drain" : "Aid";
+  const fadeUnitLabel = normalizeFadeInterval(adj.fadeInterval) === "segment" ? "Seg" : "Ph";
+  let tooltip = `${typeLabel} ${adj.char}: ${adj.points} pts (fades ${adj.fadeRate}/${fadeUnitLabel})`;
+  
+  if (adj.powerName) {
+    tooltip += ` — ${adj.powerName}${adj.powerLevel ? ` L${adj.powerLevel}` : ""}`;
+  }
+  
+  return tooltip;
+}
+
 function buildCombatValueTooltip(statKey, cvSegmentMods = [], phase, segment) {
   const currentIndex = getAbsoluteSegmentIndex(phase, segment);
   const applicableMods = [];
@@ -709,7 +721,8 @@ export class HeroControllerPanel extends Application {
             fadeInterval,
             fadeUnitLabel: fadeInterval === "segment" ? "Segment" : "Phase",
             isDrain: a.type === "drain",
-            canManage: canManageTurnEffects
+            canManage: canManageTurnEffects,
+            tooltip: buildAdjustmentTooltip(a)
           };
         }),
         isGM: privilegedUser,
@@ -1605,12 +1618,20 @@ export class HeroControllerPanel extends Application {
               </select>
             </div>
             <div style="display:flex;align-items:center;gap:8px;">
+              <label style="min-width:130px;flex-shrink:0;">Power Name:</label>
+              <input type="text" id="adj-power-name" placeholder="e.g., Telepathy, Drain STR" style="flex:1;" autofocus/>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <label style="min-width:130px;flex-shrink:0;">Power Level:</label>
+              <input type="number" id="adj-power-level" placeholder="e.g., 10" min="0" style="width:70px;"/>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
               <label style="min-width:130px;flex-shrink:0;">Characteristic:</label>
               <select id="adj-char" style="flex:1;">${charOptions}</select>
             </div>
             <div style="display:flex;align-items:center;gap:8px;">
               <label style="min-width:130px;flex-shrink:0;">Points:</label>
-              <input type="number" id="adj-points" value="6" min="1" style="width:70px;" autofocus/>
+              <input type="number" id="adj-points" value="6" min="1" style="width:70px;"/>
             </div>
             <div style="display:flex;align-items:center;gap:8px;">
               <label style="min-width:130px;flex-shrink:0;">Fade rate:</label>
@@ -1628,6 +1649,8 @@ export class HeroControllerPanel extends Application {
             label: "Add",
             callback: html => resolve({
               type:     html.find("#adj-type").val(),
+              powerName: String(html.find("#adj-power-name").val() ?? "").trim(),
+              powerLevel: parseInt(html.find("#adj-power-level").val()) || 0,
               char:     html.find("#adj-char").val(),
               points:   parseInt(html.find("#adj-points").val()) || 1,
               fadeRate: parseInt(html.find("#adj-fade").val())   || 5,
@@ -1654,6 +1677,8 @@ export class HeroControllerPanel extends Application {
     const newEntry = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       type:     result.type,
+      powerName: result.powerName,
+      powerLevel: result.powerLevel,
       char:     result.char,
       charKey:  statKey,
       points:   result.points,
@@ -1668,7 +1693,8 @@ export class HeroControllerPanel extends Application {
     const segment = canvas.scene.getFlag("hero-combat-engine", "heroSegment") ?? 1;
     const typeLabel = result.type === "drain" ? "Drain" : "Aid";
     const fadeUnitLabel = result.fadeInterval === "segment" ? "Segment" : "Phase";
-    createCombatChatMessage(`<strong>${token.name}</strong>: ${typeLabel} ${result.char} ${result.points} pts applied (fades ${result.fadeRate}/${fadeUnitLabel}).`, phase, segment);
+    const powerInfo = result.powerName ? ` (${result.powerName}${result.powerLevel ? " L" + result.powerLevel : ""})` : "";
+    createCombatChatMessage(`<strong>${token.name}</strong>: ${typeLabel} ${result.char} ${result.points} pts applied${powerInfo} (fades ${result.fadeRate}/${fadeUnitLabel}).`, phase, segment);
 
     await this.render(true);
   }
