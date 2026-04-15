@@ -64,9 +64,8 @@ function getAdjustmentBaseCharacteristicValue(actor, statKey) {
 }
 
 function getAdjustmentTargetDelta(baseValue, points, type) {
-  const pct = Math.max(0, Number(points ?? 0));
-  const magnitude = Math.round((Number(baseValue ?? 0) * pct) / 100);
-  return type === "drain" ? -Math.abs(magnitude) : Math.abs(magnitude);
+  const magnitude = Math.max(0, Number(points ?? 0));
+  return type === "drain" ? -magnitude : magnitude;
 }
 
 function getAdjustmentUpdateData(actor, statKey, delta) {
@@ -984,7 +983,13 @@ export class HeroControllerPanel extends Application {
       const tokenId = e.currentTarget.dataset.tokenId;
       const token = canvas.tokens.get(tokenId);
       if (!token) return;
-      canvas.ping(token.center);
+      // Bypass Foundry's PING_CANVAS permission check so any player can ping from the combat panel
+      const point = token.center;
+      const style = CONFIG.Canvas.pings.types.PULSE;
+      game.user.broadcastActivity({
+        ping: { point, style, scene: canvas.scene?.id, zoom: true, pull: false }
+      });
+      if (typeof canvas._onPing === "function") canvas._onPing(point, style);
     });
 
     html.find(".hero-pan-token").click((e) => {
@@ -2121,18 +2126,35 @@ export class HeroControllerPanel extends Application {
     const activeMods = token.document.getFlag("hero-combat-engine", "cvSegmentMods") ?? [];
     const currentPhase = canvas.scene.getFlag("hero-combat-engine", "heroPhase") ?? 1;
     const currentSegment = canvas.scene.getFlag("hero-combat-engine", "heroSegment") ?? 1;
-    const activeSummary = activeMods.length
-      ? activeMods.map(m => {
-        const parts = formatCombatValueModParts(getCombatValueModsFromEntry(m), configuredStats);
-        const remainingSegments = getCvModifierRemainingSegments(m, currentPhase, currentSegment);
-        const appliedPhase = Number(m.appliedPhase);
-        const appliedSegment = Number(m.appliedSegment);
-        const timingSuffix = Number.isFinite(appliedPhase) && Number.isFinite(appliedSegment)
-          ? `, applied ${appliedPhase}.${appliedSegment}`
-          : "";
-        return `${parts.join(", ")} (${remainingSegments} segment${remainingSegments === 1 ? "" : "s"} left${timingSuffix})`;
-      }).join("<br>")
-      : "None";
+
+    // Build per-modifier rows with Edit / Remove buttons
+    const activeModRows = activeMods.map((m, idx) => {
+      const parts = formatCombatValueModParts(getCombatValueModsFromEntry(m), configuredStats);
+      const remainingSegments = getCvModifierRemainingSegments(m, currentPhase, currentSegment);
+      const appliedPhase = Number(m.appliedPhase);
+      const appliedSegment = Number(m.appliedSegment);
+      const timingSuffix = Number.isFinite(appliedPhase) && Number.isFinite(appliedSegment)
+        ? `, applied ${appliedPhase}.${appliedSegment}`
+        : "";
+      const summary = `${parts.join(", ")} (${remainingSegments} seg${remainingSegments === 1 ? "" : "s"} left${timingSuffix})`;
+      return `<div style="display:flex;align-items:center;gap:6px;padding:2px 0;">
+        <span style="flex:1;">${summary}</span>
+        <button type="button" class="cv-mod-edit" data-mod-index="${idx}" title="Edit this modifier" style="flex-shrink:0;padding:1px 6px;"><i class="fas fa-pen-to-square"></i></button>
+        <button type="button" class="cv-mod-remove" data-mod-index="${idx}" title="Remove this modifier" style="flex-shrink:0;padding:1px 6px;"><i class="fas fa-trash"></i></button>
+      </div>`;
+    }).join("");
+
+    const activeSection = activeMods.length
+      ? `<div style="font-size:0.8em;padding:4px 6px;border:1px solid var(--color-border-light-secondary);border-radius:4px;">
+          <strong>Active modifiers:</strong>
+          ${activeModRows}
+          <div style="margin-top:4px;border-top:1px solid var(--color-border-light-secondary);padding-top:4px;">
+            <button type="button" class="cv-mod-clear-all" title="Remove all active modifiers" style="padding:1px 8px;"><i class="fas fa-trash-can"></i> Clear All</button>
+          </div>
+        </div>`
+      : `<div style="font-size:0.8em;padding:4px 6px;border:1px solid var(--color-border-light-secondary);border-radius:4px;">
+          <strong>Active modifiers:</strong> None
+        </div>`;
 
     const statSlidersMarkup = configuredStats.map((statKey, index) => `
       <label>${getCharacteristicLabel(statKey)} modifier:</label>
@@ -2141,16 +2163,14 @@ export class HeroControllerPanel extends Application {
     `).join("");
 
     const result = await new Promise(resolve => {
-      new Dialog({
+      const dlg = new Dialog({
         title: `Temporary Combat Value Modifiers — ${token.name}`,
         content: `
           <div style="display:grid;gap:8px;margin-top:4px;">
             <p style="margin:0;font-size:0.85em;color:var(--color-text-dark-secondary);">
               Right-click combat values. Apply temporary characteristic changes for a fixed number of segments.
             </p>
-            <div style="font-size:0.8em;padding:4px 6px;border:1px solid var(--color-border-light-secondary);border-radius:4px;">
-              <strong>Active modifiers:</strong><br>${activeSummary}
-            </div>
+            ${activeSection}
 
             <div style="display:grid;grid-template-columns:130px 1fr 42px;gap:6px 8px;align-items:center;">
               ${statSlidersMarkup}
@@ -2162,39 +2182,49 @@ export class HeroControllerPanel extends Application {
             </div>
           </div>
         `,
-        buttons: (() => {
-          const btnObj = {
-            apply: {
-              icon: '<i class="fas fa-check"></i>',
-              label: "Apply",
-              callback: html => {
-                const statMods = {};
-                configuredStats.forEach((statKey, index) => {
-                  const delta = parseInt(html.find(`#cv-mod-${index}`).val()) || 0;
-                  if (!delta) return;
-                  statMods[statKey] = delta;
-                });
+        buttons: {
+          apply: {
+            icon: '<i class="fas fa-check"></i>',
+            label: "Apply New",
+            callback: html => {
+              const statMods = {};
+              configuredStats.forEach((statKey, index) => {
+                const delta = parseInt(html.find(`#cv-mod-${index}`).val()) || 0;
+                if (!delta) return;
+                statMods[statKey] = delta;
+              });
 
-                resolve({
-                  action: "apply",
-                  statMods,
-                  segments: parseInt(html.find("#cv-segments").val()) || 1
-                });
-              }
-            },
-            cancel: { label: "Cancel", callback: () => resolve(null) }
-          };
-          if (activeMods.length) {
-            btnObj.clear = {
-              icon: '<i class="fas fa-trash"></i>',
-              label: "Clear Active",
-              callback: () => resolve({ action: "clear" })
-            };
-          }
-          return btnObj;
-        })(),
-        default: "apply"
-      }).render(true);
+              resolve({
+                action: "apply",
+                statMods,
+                segments: parseInt(html.find("#cv-segments").val()) || 1
+              });
+            }
+          },
+          cancel: { label: "Close", callback: () => resolve(null) }
+        },
+        default: "apply",
+        render: html => {
+          html.find(".cv-mod-remove").click(ev => {
+            ev.preventDefault();
+            const idx = parseInt(ev.currentTarget.dataset.modIndex);
+            resolve({ action: "remove", modIndex: idx });
+            dlg.close();
+          });
+          html.find(".cv-mod-edit").click(ev => {
+            ev.preventDefault();
+            const idx = parseInt(ev.currentTarget.dataset.modIndex);
+            resolve({ action: "edit", modIndex: idx });
+            dlg.close();
+          });
+          html.find(".cv-mod-clear-all").click(ev => {
+            ev.preventDefault();
+            resolve({ action: "clear" });
+            dlg.close();
+          });
+        }
+      });
+      dlg.render(true);
     });
 
     if (!result) return;
@@ -2202,6 +2232,7 @@ export class HeroControllerPanel extends Application {
     const phase   = canvas.scene.getFlag("hero-combat-engine", "heroPhase")   ?? 1;
     const segment = canvas.scene.getFlag("hero-combat-engine", "heroSegment") ?? 1;
 
+    // --- Clear All ---
     if (result.action === "clear") {
       const total = sumCombatValueMods(activeMods);
       const updates = {};
@@ -2218,6 +2249,127 @@ export class HeroControllerPanel extends Application {
       return;
     }
 
+    // --- Remove Single ---
+    if (result.action === "remove") {
+      const idx = result.modIndex;
+      const mod = activeMods[idx];
+      if (!mod) return;
+
+      const modDeltas = getCombatValueModsFromEntry(mod);
+      const updates = {};
+      for (const [statKey, delta] of Object.entries(modDeltas)) {
+        Object.assign(updates, getCharacteristicUpdateData(actor, statKey, -delta));
+      }
+      if (Object.keys(updates).length) await actor.update(updates);
+
+      const remaining = activeMods.filter((_, i) => i !== idx);
+      if (remaining.length) {
+        await token.document.setFlag("hero-combat-engine", "cvSegmentMods", remaining);
+      } else {
+        await token.document.unsetFlag("hero-combat-engine", "cvSegmentMods");
+      }
+
+      const parts = formatCombatValueModParts(modDeltas, configuredStats);
+      createCombatChatMessage(`<strong>${token.name}</strong> modifier removed: ${parts.join(", ")}.`, phase, segment);
+
+      await this.render(true);
+      return;
+    }
+
+    // --- Edit Single (re-open dialog pre-filled) ---
+    if (result.action === "edit") {
+      const idx = result.modIndex;
+      const mod = activeMods[idx];
+      if (!mod) return;
+
+      const existingMods = getCombatValueModsFromEntry(mod);
+      const existingRemaining = getCvModifierRemainingSegments(mod, currentPhase, currentSegment);
+
+      const editSlidersMarkup = configuredStats.map((statKey, si) => {
+        const val = Number(existingMods[statKey] ?? 0);
+        return `
+          <label>${getCharacteristicLabel(statKey)} modifier:</label>
+          <input type="range" id="cv-edit-${si}" min="-10" max="10" step="1" value="${val}" oninput="this.nextElementSibling.textContent=this.value;"/>
+          <span id="cv-edit-${si}-val">${val}</span>
+        `;
+      }).join("");
+
+      const editResult = await new Promise(resolve => {
+        new Dialog({
+          title: `Edit Modifier — ${token.name}`,
+          content: `
+            <div style="display:grid;gap:8px;margin-top:4px;">
+              <div style="display:grid;grid-template-columns:130px 1fr 42px;gap:6px 8px;align-items:center;">
+                ${editSlidersMarkup}
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <label style="min-width:130px;flex-shrink:0;">Duration (segments):</label>
+                <input type="number" id="cv-edit-segments" min="1" value="${existingRemaining}" style="width:72px;"/>
+              </div>
+            </div>
+          `,
+          buttons: {
+            save: {
+              icon: '<i class="fas fa-check"></i>',
+              label: "Save",
+              callback: html => {
+                const statMods = {};
+                configuredStats.forEach((statKey, si) => {
+                  const delta = parseInt(html.find(`#cv-edit-${si}`).val()) || 0;
+                  if (!delta) return;
+                  statMods[statKey] = delta;
+                });
+                resolve({
+                  statMods,
+                  segments: parseInt(html.find("#cv-edit-segments").val()) || 1
+                });
+              }
+            },
+            cancel: { label: "Cancel", callback: () => resolve(null) }
+          },
+          default: "save"
+        }).render(true);
+      });
+
+      if (!editResult) return;
+
+      if (!Object.keys(editResult.statMods).length) {
+        ui.notifications.warn("Set at least one combat value modifier, or remove the entry instead.");
+        return;
+      }
+
+      // Revert old deltas, apply new ones
+      const oldDeltas = getCombatValueModsFromEntry(mod);
+      const revertUpdates = {};
+      for (const [statKey, delta] of Object.entries(oldDeltas)) {
+        Object.assign(revertUpdates, getCharacteristicUpdateData(actor, statKey, -delta));
+      }
+      const applyUpdates = {};
+      for (const [statKey, delta] of Object.entries(editResult.statMods)) {
+        Object.assign(applyUpdates, getCharacteristicUpdateData(actor, statKey, delta));
+      }
+      const merged = { ...revertUpdates };
+      for (const [path, val] of Object.entries(applyUpdates)) {
+        merged[path] = (merged[path] ?? 0) + val - (revertUpdates[path] ?? 0);
+        // Re-derive: just use actor's current value adjusted by net delta
+      }
+      // Simpler: revert old, then apply new in sequence
+      if (Object.keys(revertUpdates).length) await actor.update(revertUpdates);
+      if (Object.keys(applyUpdates).length) await actor.update(applyUpdates);
+
+      const newEntry = createCvModifierEntry(editResult.statMods, editResult.segments, phase, segment);
+      const updated = [...activeMods];
+      updated[idx] = newEntry;
+      await token.document.setFlag("hero-combat-engine", "cvSegmentMods", updated);
+
+      const parts = formatCombatValueModParts(editResult.statMods, configuredStats);
+      createCombatChatMessage(`<strong>${token.name}</strong> modifier updated: ${parts.join(", ")} for ${editResult.segments} segment${editResult.segments === 1 ? "" : "s"}.`, phase, segment);
+
+      await this.render(true);
+      return;
+    }
+
+    // --- Apply New ---
     const segments = Math.max(1, result.segments);
     if (!Object.keys(result.statMods ?? {}).length) {
       ui.notifications.warn("Set at least one combat value modifier.");

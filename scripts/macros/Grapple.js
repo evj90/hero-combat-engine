@@ -297,7 +297,7 @@ export async function run() {
 
   new Dialog({
     title: "Choose Grapple Target",
-    content: `<p>Select the target you are grabbing:</p><select id="grabTarget">${options}</select>`,
+    content: `<p><strong>Grappler:</strong> ${grappler.name}</p><p>Select the target you are grabbing:</p><select id="grabTarget">${options}</select>`,
     buttons: {
       ok: {
         label: "Grab",

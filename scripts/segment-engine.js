@@ -60,9 +60,8 @@ function getAdjustmentBaseCharacteristicValue(actor, statKey) {
 }
 
 function getAdjustmentTargetDelta(baseValue, points, type) {
-  const pct = Math.max(0, Number(points ?? 0));
-  const magnitude = Math.round((Number(baseValue ?? 0) * pct) / 100);
-  return type === "drain" ? -Math.abs(magnitude) : Math.abs(magnitude);
+  const magnitude = Math.max(0, Number(points ?? 0));
+  return type === "drain" ? -magnitude : magnitude;
 }
 
 // One-time migration for legacy adjustment entries that predate metadata-backed
@@ -315,29 +314,32 @@ async function adjustmentFade(interval = "phase") {
       }
 
       const statKey = normalizeCharacteristicKey(adj.charKey ?? adj.char);
-      const newPoints = Math.max(adj.points - adj.fadeRate, 0);
-      const hasAppliedMeta = Number.isFinite(Number(adj.appliedDelta));
-      const hasBaseMeta = Number.isFinite(Number(adj.baseValue));
-      let baseValue = Number(adj.baseValue ?? 0);
-      let newApplied = Number(adj.appliedDelta ?? 0);
-      if (hasAppliedMeta && hasBaseMeta) {
-        const oldApplied = Number(adj.appliedDelta ?? 0);
-        baseValue = Number(adj.baseValue ?? getAdjustmentBaseCharacteristicValue(actor, statKey));
-        newApplied = getAdjustmentTargetDelta(baseValue, newPoints, adj.type);
-        const delta = newApplied - oldApplied;
-        if (delta !== 0) {
-          statDeltas[statKey] = (statDeltas[statKey] ?? 0) + delta;
-        }
+      const oldPoints = adj.points;
+      const newPoints = Math.max(oldPoints - adj.fadeRate, 0);
+      const fadeAmount = oldPoints - newPoints;
+
+      // Compute the stat delta directly from the faded amount.
+      // Drain applied a negative delta → fading restores (positive).
+      // Aid applied a positive delta → fading reduces (negative).
+      if (fadeAmount > 0 && statKey) {
+        const fadeDelta = adj.type === "drain" ? fadeAmount : -fadeAmount;
+        statDeltas[statKey] = (statDeltas[statKey] ?? 0) + fadeDelta;
       }
+
+      // Track updated appliedDelta for bookkeeping
+      const oldApplied = Number(adj.appliedDelta ?? 0);
+      const newApplied = adj.type === "drain"
+        ? oldApplied + fadeAmount
+        : oldApplied - fadeAmount;
 
       const typeLabel = adj.type === "drain" ? "Drain" : "Aid";
       const fadeUnitLabel = fadeInterval === "segment" ? "Segment" : "Phase";
       if (newPoints <= 0) {
-        messages.push(`<strong>${t.name}</strong>: ${typeLabel} ${adj.char} faded completely (${adj.points} pts → 0, ${adj.fadeRate}/${fadeUnitLabel}).`);
+        messages.push(`<strong>${t.name}</strong>: ${typeLabel} ${adj.char} faded completely (${oldPoints} pts → 0, ${adj.fadeRate}/${fadeUnitLabel}).`);
         // entry dropped — not pushed to kept
       } else {
-        messages.push(`<strong>${t.name}</strong>: ${typeLabel} ${adj.char} — ${adj.points} → ${newPoints} pts remaining (${adj.fadeRate}/${fadeUnitLabel}).`);
-        kept.push({ ...adj, points: newPoints, charKey: statKey, ...(hasAppliedMeta && hasBaseMeta ? { baseValue, appliedDelta: newApplied } : {}) });
+        messages.push(`<strong>${t.name}</strong>: ${typeLabel} ${adj.char} — ${oldPoints} → ${newPoints} pts remaining (${adj.fadeRate}/${fadeUnitLabel}).`);
+        kept.push({ ...adj, points: newPoints, charKey: statKey, appliedDelta: newApplied, baseValue: Number(adj.baseValue ?? 0) });
       }
     }
 

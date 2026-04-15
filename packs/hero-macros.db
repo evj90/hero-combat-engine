@@ -6,3 +6,9 @@
 {"_id":"HeroPrevToken001","name":"Previous Acting Token","type":"script","scope":"global","command":"game.heroCombat.previousActingToken();","img":"icons/svg/back.svg","flags":{}}
 {"_id":"HeroMindIllu01","name":"Mental Illusion Attack","type":"script","scope":"global","command":"game.heroCombat.runMentalIllusionMacro();","img":"icons/magic/control/fear-fright-monster-grin-blue.webp","flags":{}}
 {"_id":"HeroRunRegMac01","name":"Run Registered HERO Macro","type":"script","scope":"global","command":"game.heroCombat.openRegisteredMacroDialog();","img":"icons/svg/dice-target.svg","flags":{}}
+{"_id":"HeroMacFullHlth","name":"HERO: Full Health","type":"script","scope":"global","command":"game.heroCombat.runRegisteredMacro('Full Health');","img":"icons/svg/heal.svg","flags":{}}
+{"_id":"HeroMacGrapple1","name":"HERO: Grapple","type":"script","scope":"global","command":"game.heroCombat.runRegisteredMacro('Grapple');","img":"icons/svg/trap.svg","flags":{}}
+{"_id":"HeroMacRecover1","name":"HERO: Recover","type":"script","scope":"global","command":"game.heroCombat.runRegisteredMacro('recover');","img":"icons/svg/regen.svg","flags":{}}
+{"_id":"HeroMacRmStatus","name":"HERO: Remove Status Effects","type":"script","scope":"global","command":"game.heroCombat.runRegisteredMacro('Remove Status Effects');","img":"icons/svg/cancel.svg","flags":{}}
+{"_id":"HeroMacRotatCW","name":"HERO: Rotate CW","type":"script","scope":"global","command":"game.heroCombat.runRegisteredMacro('Rotate CW');","img":"icons/svg/clockwork.svg","flags":{}}
+{"_id":"HeroMacSetUprt","name":"HERO: Set Upright","type":"script","scope":"global","command":"game.heroCombat.runRegisteredMacro('Set Upright');","img":"icons/svg/up.svg","flags":{}}

@@ -578,6 +578,16 @@ Hooks.once("ready", async () => {
     }
   });
 
+  // Re-render when actor characteristics or token flags change so modifier
+  // updates (cover, OCV/MCV bonus, CV adjustments, status effects, etc.)
+  // are reflected immediately on all clients.
+  Hooks.on("updateActor", () => {
+    game.heroCombat?.heroControllerPanel?.render(true);
+  });
+  Hooks.on("updateToken", () => {
+    game.heroCombat?.heroControllerPanel?.render(true);
+  });
+
   // Auto-restore tracker panel when a scene with active HERO combat is loaded
   Hooks.on("canvasReady", () => {
     if (!game.user.isGM) return;

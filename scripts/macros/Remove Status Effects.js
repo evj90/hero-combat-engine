@@ -5,9 +5,11 @@ export async function run() {
     return;
   }
 
+  const names = selected.map(t => t.name).join(", ");
+
   const confirmed = await Dialog.confirm({
     title: "Remove All Status Effects?",
-    content: "<p>Remove temporary effects from selected tokens?</p>",
+    content: `<p><strong>Tokens:</strong> ${names}</p><p>Remove temporary effects from selected tokens?</p>`,
     yes: () => true,
     no: () => false,
     defaultYes: true

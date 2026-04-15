@@ -1,19 +1,21 @@
 export async function run() {
+  const tokens = canvas.tokens.controlled;
+  if (tokens.length === 0) {
+    ui.notifications.warn("No tokens selected.");
+    return;
+  }
+
+  const names = tokens.map(t => t.name).join(", ");
+
   const confirmed = await Dialog.confirm({
     title: "Rotate selected",
-    content: "<p>Rotate selected tokens clockwise?</p>",
+    content: `<p><strong>Tokens:</strong> ${names}</p><p>Rotate selected tokens clockwise?</p>`,
     yes: () => true,
     no: () => false,
     defaultYes: true
   });
 
   if (!confirmed) return;
-
-  const tokens = canvas.tokens.controlled;
-  if (tokens.length === 0) {
-    ui.notifications.warn("No tokens selected.");
-    return;
-  }
 
   const allowed = [0, 90, 180, 270];
   let debugLines = [];

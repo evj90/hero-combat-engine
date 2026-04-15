@@ -1,19 +1,21 @@
 export async function run() {
+  const tokens = canvas.tokens.controlled;
+  if (tokens.length === 0) {
+    ui.notifications.warn("No tokens selected for Recovery.");
+    return;
+  }
+
+  const names = tokens.map(t => t.name).join(", ");
+
   const confirmed = await Dialog.confirm({
     title: "Recover selected",
-    content: "<p>Apply Recovery to selected tokens?</p>",
+    content: `<p><strong>Tokens:</strong> ${names}</p><p>Apply Recovery to selected tokens?</p>`,
     yes: () => true,
     no: () => false,
     defaultYes: true
   });
 
   if (!confirmed) return;
-
-  const tokens = canvas.tokens.controlled;
-  if (tokens.length === 0) {
-    ui.notifications.warn("No tokens selected for Recovery.");
-    return;
-  }
 
   const results = [];
   for (const t of tokens) {
