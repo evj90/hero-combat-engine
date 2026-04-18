@@ -9,27 +9,28 @@ An unofficial Foundry VTT v11 combat-tracker module for HERO System that replace
 The module keeps combat state on scene flags, provides a floating controller panel for the table, and adds HERO-specific tools like Hold, Abort, pip-based stat bars, and segment-aware token highlighting.
 
 > HERO System is a trademark of HERO Games. This module is not affiliated with or endorsed by HERO Games.
+I'm just a huge fan. 🤙
 
 ![HERO Combat Engine panel](images/screenshot_panel.png)
 
-## What Foundry's Built-In Tracker Doesn't Offer
+## What It Does
+
+- Replaces Foundry's linear initiative with HERO's 12-segment phase/segment combat flow.
+- Maintains DEX-sorted acting order with configurable END or EGO tie-break behavior.
+- Provides a floating tracker showing current segment, acting token, and full combat order.
+- Highlights active tokens across clients with segment-aware burst and glow effects.
+- Supports HERO actions and timing controls, including Hold, Release Hold, Abort, segment stepping, and post-Segment 12 recovery.
+- Displays configurable pip-style stat tracking for STUN, BODY, END, and optional PRE.
+- Manages quick conditions, active effects, and combat state directly from the panel.
+- Gives GMs one-click combat controls to begin, add/remove tokens, and refresh order after stat changes.
+
+## What the Foundry's Built-In Tracker Doesn't Offer
 
 - Native 12-segment HERO timing with phase-aware turn flow.
 - Segment-level actions like Hold, Release Hold, and Abort.
 - DEX-sorted acting order with HERO-style tie-break options.
 - Segment-aware acting-token highlights and optional non-acting filtering.
 - One-panel HERO combat controls for Begin/Add/Remove/Refresh/End and token actions.
-
-## What It Does
-
-- Replaces normal initiative flow with HERO segment and phase timing.
-- Sorts combatants by DEX, with configurable END or EGO tie-breaks.
-- Shows a floating tracker with the current segment, acting token, and full combat order.
-- Highlights acting tokens with burst and glow effects across clients.
-- Supports Hold, Release Hold, Abort, recovery shortcuts, and segment stepping.
-- Displays pip-style STUN, BODY, END, and optional PRE status bars.
-- Tracks quick conditions and combat state directly from the panel.
-- Lets the GM begin combat from selected tokens, add or remove tokens mid-fight, and refresh order after stat changes.
 
 ## Requirements
 
@@ -97,9 +98,9 @@ Download a ZIP and unpack it into your Foundry `Data/modules/` folder (the unpac
 ### Per-Combatant Controls
 
 - **Ping** and **Pan** jump the table to a token quickly.
-- **Cover** cycles temporary DCV bonus stages, with right-click direct set (right-click indicators shown as blue dots).
-- **OCV Bonus** cycles temporary OCV bonus stages, with right-click direct set (right-click indicators shown as blue dots).
-- **MCV Bonus** cycles temporary MCV bonus stages, with right-click direct set (right-click indicators shown as blue dots).
+- **DCV Bonus** cycles DCV bonus stages, with right-click direct set (right-click indicators shown as blue dots).
+- **OCV Bonus** cycles OCV bonus stages, with right-click direct set (right-click indicators shown as blue dots).
+- **MCV Bonus** cycles MCV bonus stages, with right-click direct set (right-click indicators shown as blue dots).
 - **Drain / Aid badges** track active adjustments with right-click management (right-click indicators shown as blue dots).
 - **Hold** removes a token from its current place so it can act later in the segment.
 - **Release Hold** inserts that held token immediately after the current acting token.
@@ -120,9 +121,8 @@ Download a ZIP and unpack it into your Foundry `Data/modules/` folder (the unpac
 
 ### Stat and Value Display
 
-- Pip bars for tracked characteristics, defaulting to STUN, BODY, and END.
-- Optional PRE tracking by adding it to the tracked pip characteristics setting.
-- Combat value rows are configurable (default OCV, DCV, MCV).
+- Pip bars for tracked characteristics (default STUN, BODY, and END; add any other).
+- Combat value rows are configurable (default OCV, DCV, MCV; add any other)).
 - Temporary combat value modifiers can target any configured combat-value stat.
 - Color-coded thresholds for Full, Less, Half, Hurt, Risk, and Out states.
 - Accessibility sizing options for larger text and hit areas.
@@ -130,12 +130,10 @@ Download a ZIP and unpack it into your Foundry `Data/modules/` folder (the unpac
 ### Status and Adjustment Tools
 
 - Quick status toggles for Flashed (Sight), Flashed (Hearing), and Entangled/Restrained.
-- Prone is shown when active so it can be managed from the tracker.
-- Cover tracking with one-click DCV stage changes.
-- OCV bonus tracking with one-click stage changes.
+- Other active effects displayed when active.
+- OCV/DCV/MCV bonus tracking with one-click cycle changes.
 - Drain and Aid badges tracked from the panel.
 - Entangle BODY tracking when present on the token.
-- Extra active effects displayed as icons in the row.
 
 ## Settings Highlights
 
@@ -164,34 +162,12 @@ The settings menu covers four main areas:
 
 ## Included Content
 
-- Floating HERO combat controller panel
-- Highlight and segment timing engine
-- Settings menu for tracker, chat, recovery, and visuals
-- Bundled macro compendium with common combat actions available individually:
-  - **HERO: Full Health** — Restore full health on selected tokens
-  - **HERO: Grapple** — STR contest tracker with squeeze, throw, pin, drag, and break free
-  - **HERO: Recover** — Apply Recovery to selected tokens
-  - **HERO: Remove Status Effects** — Clear temporary effects from selected tokens
-  - **HERO: Rotate CW** — Rotate selected tokens clockwise in 90° increments
-  - **HERO: Set Upright** — Reset selected tokens to 0° rotation
-  - **Run Registered HERO Macro** — Pick-from-list launcher for all registered macros
-  - Additional lifecycle macros: Begin/End Combat, Advance Segment, Highlight Acting, Next/Previous Token, Mental Illusion Attack
-
-## Macro Development Workflow
-
-Develop macro logic in source files and expose them automatically:
-
-1. Add macro scripts under `scripts/macros/`.
-2. Run `node tools/build-macro-registry.mjs`.
-3. Reload Foundry.
-4. Call by name with `await game.heroCombat.runRegisteredMacro("macro-name")`.
-5. Or run **Run Registered HERO Macro** from the module macro compendium to pick from a list.
-
-File names become macro names:
-- `scripts/macros/my-macro.js` -> `"my-macro"`
-- `scripts/macros/gm/end-turn.js` -> `"gm/end-turn"`
-
-The generated loader file is `scripts/macro-registry.generated.js`.
+- Floating HERO combat controller panel with segment/token navigation and GM controls
+- HERO segment timing and token-highlighting engine
+- Settings menu for tracker behavior, turn management, visuals, recovery, and chat output
+- Bundled macro compendium that includes:
+  - Core action macros: **HERO: Full Health**, **HERO: Grapple**, **HERO: Recover**, **HERO: Remove Status Effects**, **HERO: Rotate CW**, **HERO: Set Upright**
+  - Utility/lifecycle macros such as Begin/End Combat, Advance Segment, Highlight Acting, Next/Previous Token, and Mental Illusion Attack
 
 ## Contributing
 
