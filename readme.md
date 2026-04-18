@@ -4,13 +4,21 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Latest Release](https://img.shields.io/github/v/release/evj90/hero-combat-engine)](https://github.com/evj90/hero-combat-engine/releases)
 
-An unofficial Foundry VTT v11 module for running HERO System combat with a 12-segment, phase-based tracker instead of Foundry's standard turn order.
+An unofficial Foundry VTT v11 combat-tracker module for HERO System that replaces Foundry's default tracker, which is incompatible with HERO's phase/segment model.
 
 The module keeps combat state on scene flags, provides a floating controller panel for the table, and adds HERO-specific tools like Hold, Abort, pip-based stat bars, and segment-aware token highlighting.
 
 > HERO System is a trademark of HERO Games. This module is not affiliated with or endorsed by HERO Games.
 
 ![HERO Combat Engine panel](images/screenshot_panel.png)
+
+## What Foundry's Built-In Tracker Doesn't Offer
+
+- Native 12-segment HERO timing with phase-aware turn flow.
+- Segment-level actions like Hold, Release Hold, and Abort.
+- DEX-sorted acting order with HERO-style tie-break options.
+- Segment-aware acting-token highlights and optional non-acting filtering.
+- One-panel HERO combat controls for Begin/Add/Remove/Refresh/End and token actions.
 
 ## What It Does
 
@@ -159,7 +167,15 @@ The settings menu covers four main areas:
 - Floating HERO combat controller panel
 - Highlight and segment timing engine
 - Settings menu for tracker, chat, recovery, and visuals
-- Bundled macro compendium for common combat actions
+- Bundled macro compendium with common combat actions available individually:
+  - **HERO: Full Health** — Restore full health on selected tokens
+  - **HERO: Grapple** — STR contest tracker with squeeze, throw, pin, drag, and break free
+  - **HERO: Recover** — Apply Recovery to selected tokens
+  - **HERO: Remove Status Effects** — Clear temporary effects from selected tokens
+  - **HERO: Rotate CW** — Rotate selected tokens clockwise in 90° increments
+  - **HERO: Set Upright** — Reset selected tokens to 0° rotation
+  - **Run Registered HERO Macro** — Pick-from-list launcher for all registered macros
+  - Additional lifecycle macros: Begin/End Combat, Advance Segment, Highlight Acting, Next/Previous Token, Mental Illusion Attack
 
 ## Macro Development Workflow
 

@@ -7,23 +7,41 @@ This guide explains how to set up and develop the HERO Combat Engine locally.
 ```
 hero-combat-engine/
 ├── scripts/               # JavaScript modules
-│   ├── main.js           # Entry point, initializes module
+│   ├── main.js                 # Entry point, initializes module
 │   ├── controller-panel.js     # Floating panel UI and logic
 │   ├── segment-engine.js       # Segment/phase timing logic
 │   ├── begin-combat.js         # Combat initialization
 │   ├── end-combat.js           # Combat cleanup
 │   ├── highlight.js            # Token highlighting system
-│   └── utils.js                # Shared utilities
+│   ├── spd-map.js              # SPD → segment lookup table
+│   ├── settings-menu.js        # Settings menu Application
+│   ├── attack-sheet-tooltips.js # Attack tooltip helpers
+│   ├── mental-illusion-macro.js # Mental Illusion macro
+│   ├── utils.js                # Shared utilities
+│   ├── macro-registry.generated.js # Auto-generated macro loader
+│   └── macros/                 # Source-controlled macro scripts
+│       ├── Full Health.js
+│       ├── Grapple.js
+│       ├── recover.js
+│       ├── Remove Status Effects.js
+│       ├── Rotate CW.js
+│       └── Set Upright.js
 ├── styles/               # CSS
 │   └── hero-panel.css    # All module styles
 ├── templates/            # Handlebars HTML templates
 │   ├── controller-panel.html
 │   └── settings-menu.html
+├── tools/                # Build scripts
+│   └── build-macro-registry.mjs
 ├── lang/                 # Localization files
 ├── data/                 # Configuration data
-├── packs/                # Foundry compendiums (if any)
+│   └── bucket-descriptions.json
+├── packs/                # Foundry compendium packs
+│   └── hero-macros.db
+├── images/               # Screenshots and assets
+├── docs/                 # Developer documentation
 ├── module.json           # Module manifest
-├── CHANGELOG.md          # Version history and changes
+├── CHANGELOG.md          # Version history
 └── README.md             # User documentation
 ```
 
@@ -107,22 +125,32 @@ canvas.scene.getFlag("hero-combat-engine", "hero-combat.actingOrder")
 
 ### Segment/Phase Engine (`segment-engine.js`)
 
-The core timing system converts HERO's 12-segment structure into JavaScript calls:
-- **Phase:** Round (1-12)
-- **Segment:** Section within a phase (1-12, determined by SPD)
-- **Acting Order:** Sorted by SPD, then DEX/EGO for ties
+The core timing system implements HERO's 12-segment structure:
+- **Phase:** Round counter (increments after segment 12)
+- **Segment:** Position within a phase (1–12, determined by SPD chart)
+- **Acting Order:** Sorted by DEX, with configurable END or EGO tie-breaks
 
 Main functions:
 - `segmentAdvance()` — Move to next segment or phase
-- `autoSkip()` — Skip empty segments if enabled
-- `manageHeld()` / `manageAborted()` — Handle special states
+- `previousSegment()` — Step backward
+- `nextActingToken()` / `previousActingToken()` — Navigate within a segment
+- `adjustmentFade()` — Process Drain/Aid fade per segment or phase
+- `cvSegmentModifierTick()` — Expire timed combat value modifiers
+- `segmentFlashRecovery()` — Reduce Flash Points each segment
+- `post12RecoveryAllCombatants()` — Post-segment 12 automatic recovery
+- Auto-skip empty segments when enabled
 
 ### Controller Panel (`controller-panel.js`)
 
 The UI and interaction layer:
 - `getData()` — Collects current combat state for template rendering
-- `activateListeners()` — Wires up button clicks and dialogs
+- `activateListeners()` — Wires up button clicks, context menus, and dialogs
 - Direct updates (GMs) vs socket emissions (players)
+- Temporary CV modifier dialog with per-modifier Edit, Remove, and Clear All
+- Cover, OCV bonus, MCV bonus stage cycling
+- Drain/Aid adjustment creation and management dialogs
+- Entangle management dialog
+- Quick status toggles and flash point prompts
 
 Key data:
 - `combatants` — Array of token data (name, stats, actions available)
@@ -132,9 +160,9 @@ Key data:
 ### Highlighting (`highlight.js`)
 
 Visual indicators for acting tokens:
-- PIXI starburst (local, not multiplayer-safe)
+- PIXI starburst animation (local canvas)
 - AmbientLight glow (placed on scene, visible to all)
-- Configurable colors via settings
+- Configurable colors for active and incapacitated tokens
 
 ## Common Tasks
 

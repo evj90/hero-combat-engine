@@ -1465,11 +1465,11 @@ export class HeroControllerPanel extends Application {
             <p style="margin:0;font-size:0.85em;color:var(--color-text-dark-secondary);">Select the temporary DCV bonus granted by cover.</p>
             <div style="display:flex;align-items:center;gap:8px;">
               <label style="min-width:100px;flex-shrink:0;">DCV bonus:</label>
-              <select id="cover-dcv" style="flex:1;">
-                <option value="0"${current === 0 ? " selected" : ""}>None (+0 DCV)</option>
-                <option value="1"${current === 1 ? " selected" : ""}>Low (+1 DCV)</option>
-                <option value="2"${current === 2 ? " selected" : ""}>Medium (+2 DCV)</option>
-                <option value="3"${current === 3 ? " selected" : ""}>High (+3 DCV)</option>
+              <select id="dcv-bonus" style="flex:1;">
+                <option value="0"${current === 0 ? " selected" : ""}>+0 DCV</option>
+                <option value="1"${current === 1 ? " selected" : ""}>+1 DCV</option>
+                <option value="2"${current === 2 ? " selected" : ""}>+2 DCV</option>
+                <option value="3"${current === 3 ? " selected" : ""}>+3 DCV</option>
               </select>
             </div>
           </div>
@@ -1478,7 +1478,7 @@ export class HeroControllerPanel extends Application {
           apply: {
             icon: '<i class="fas fa-shield-halved"></i>',
             label: current > 0 ? "Update" : "Apply",
-            callback: html => resolve({ action: "apply", dcv: parseInt(html.find("#cover-dcv").val()) })
+            callback: html => resolve({ action: "apply", dcv: parseInt(html.find("#dcv-bonus").val()) })
           },
           cancel: { label: "Cancel", callback: () => resolve(null) }
         },
@@ -1522,10 +1522,10 @@ export class HeroControllerPanel extends Application {
             <div style="display:flex;align-items:center;gap:8px;">
               <label style="min-width:100px;flex-shrink:0;">OCV bonus:</label>
               <select id="ocv-bonus" style="flex:1;">
-                <option value="0"${current === 0 ? " selected" : ""}>None (+0 OCV)</option>
-                <option value="1"${current === 1 ? " selected" : ""}>Low (+1 OCV)</option>
-                <option value="2"${current === 2 ? " selected" : ""}>Medium (+2 OCV)</option>
-                <option value="3"${current === 3 ? " selected" : ""}>High (+3 OCV)</option>
+                <option value="0"${current === 0 ? " selected" : ""}>+0 OCV</option>
+                <option value="1"${current === 1 ? " selected" : ""}>+1 OCV</option>
+                <option value="2"${current === 2 ? " selected" : ""}>+2 OCV</option>
+                <option value="3"${current === 3 ? " selected" : ""}>+3 OCV</option>
               </select>
             </div>
           </div>
@@ -1577,10 +1577,10 @@ export class HeroControllerPanel extends Application {
             <div style="display:flex;align-items:center;gap:8px;">
               <label style="min-width:100px;flex-shrink:0;">MCV bonus:</label>
               <select id="mcv-bonus" style="flex:1;">
-                <option value="0"${current === 0 ? " selected" : ""}>None (+0 MCV)</option>
-                <option value="1"${current === 1 ? " selected" : ""}>Low (+1 MCV)</option>
-                <option value="2"${current === 2 ? " selected" : ""}>Medium (+2 MCV)</option>
-                <option value="3"${current === 3 ? " selected" : ""}>High (+3 MCV)</option>
+                <option value="0"${current === 0 ? " selected" : ""}>+0 MCV</option>
+                <option value="1"${current === 1 ? " selected" : ""}>+1 MCV</option>
+                <option value="2"${current === 2 ? " selected" : ""}>+2 MCV</option>
+                <option value="3"${current === 3 ? " selected" : ""}>+3 MCV</option>
               </select>
             </div>
           </div>
@@ -2139,8 +2139,8 @@ export class HeroControllerPanel extends Application {
       const summary = `${parts.join(", ")} (${remainingSegments} seg${remainingSegments === 1 ? "" : "s"} left${timingSuffix})`;
       return `<div style="display:flex;align-items:center;gap:6px;padding:2px 0;">
         <span style="flex:1;">${summary}</span>
-        <button type="button" class="cv-mod-edit" data-mod-index="${idx}" title="Edit this modifier" style="flex-shrink:0;padding:1px 6px;"><i class="fas fa-pen-to-square"></i></button>
-        <button type="button" class="cv-mod-remove" data-mod-index="${idx}" title="Remove this modifier" style="flex-shrink:0;padding:1px 6px;"><i class="fas fa-trash"></i></button>
+        <button type="button" class="cv-mod-edit" data-mod-index="${idx}" title="Edit this modifier" style="flex-shrink:0;width:24px;height:24px;padding:0;line-height:24px;text-align:center;"><i class="fas fa-pen-to-square"></i></button>
+        <button type="button" class="cv-mod-remove" data-mod-index="${idx}" title="Remove this modifier" style="flex-shrink:0;width:24px;height:24px;padding:0;line-height:24px;text-align:center;"><i class="fas fa-trash"></i></button>
       </div>`;
     }).join("");
 
@@ -2149,7 +2149,7 @@ export class HeroControllerPanel extends Application {
           <strong>Active modifiers:</strong>
           ${activeModRows}
           <div style="margin-top:4px;border-top:1px solid var(--color-border-light-secondary);padding-top:4px;">
-            <button type="button" class="cv-mod-clear-all" title="Remove all active modifiers" style="padding:1px 8px;"><i class="fas fa-trash-can"></i> Clear All</button>
+            <button type="button" class="cv-mod-clear-all" title="Remove all active modifiers" style="width:auto;padding:1px 8px;font-size:0.8em;"><i class="fas fa-trash-can"></i> Clear All</button>
           </div>
         </div>`
       : `<div style="font-size:0.8em;padding:4px 6px;border:1px solid var(--color-border-light-secondary);border-radius:4px;">
