@@ -11,7 +11,7 @@
       {{/if}}
       <div class="flex1 hero-segment-header">
         <h3 class="encounter-title">Segment {{phase}}.{{segment}}</h3>
-        {{#if currentActingTokenName}}<span class="hero-acting-label" title="Acting: {{currentActingTokenName}}">{{currentActingTokenName}}</span>{{/if}}
+        {{#if currentActingTokenName}}<span class="hero-acting-label" data-token-id="{{currentActingTokenId}}" title="Acting: {{currentActingTokenName}} (double-click to pan)">{{currentActingTokenName}}</span>{{/if}}
       </div>
       {{#if canManageCombat}}
       <a class="encounter-control hero-tracker-btn" id="hero-next-token" role="button" title="Next Token" aria-label="Next Token">

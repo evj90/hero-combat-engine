@@ -129,8 +129,8 @@ Download a ZIP and unpack it into your Foundry `Data/modules/` folder (the unpac
 
 ### Status and Adjustment Tools
 
-- Quick status toggles for Flashed (Sight), Flashed (Hearing), and Entangled/Restrained.
-- Other active effects displayed when active.
+- Quick status toggles for Flashed (Sight), Flashed (Hearing), and Entangled/Restrained (Prone is not shown by default).
+- Other non-quick active effects displayed when active.
 - OCV/DCV/MCV bonus tracking with one-click cycle changes.
 - Drain and Aid badges tracked from the panel.
 - Entangle BODY tracking when present on the token.

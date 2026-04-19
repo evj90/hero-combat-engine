@@ -743,7 +743,7 @@ export class HeroControllerPanel extends Application {
               label: s.label,
               icon: cfgMap[s.id] ?? s.fallbackIcon,
               active,
-              showInTracker: s.id !== "prone" || active,
+              showInTracker: s.id !== "prone",
               canToggle: isPrivileged() || isOwnedByCurrentUser
             };
             if (active) {
@@ -993,6 +993,14 @@ export class HeroControllerPanel extends Application {
     });
 
     html.find(".hero-pan-token").click((e) => {
+      e.preventDefault();
+      const tokenId = e.currentTarget.dataset.tokenId;
+      const token = canvas.tokens.get(tokenId);
+      if (!token) return;
+      canvas.animatePan({ x: token.center.x, y: token.center.y, scale: Math.max(1, canvas.stage.scale.x), duration: 250 });
+    });
+
+    html.find(".hero-acting-label").dblclick((e) => {
       e.preventDefault();
       const tokenId = e.currentTarget.dataset.tokenId;
       const token = canvas.tokens.get(tokenId);
