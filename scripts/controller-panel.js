@@ -158,9 +158,10 @@ function getLightningReflexesIndicator(actor) {
     })
     .find(Boolean);
 
-  const tooltip = detail
+  const baseTooltip = detail
     ? `${lrItem.name}: ${detail}`
     : `${lrItem.name}${lrItem.type ? ` (${lrItem.type})` : ""}`;
+  const tooltip = `Lightning Reflexes — ${baseTooltip}`;
 
   return {
     shortLabel: "LR",
@@ -2135,29 +2136,38 @@ export class HeroControllerPanel extends Application {
     const currentPhase = canvas.scene.getFlag("hero-combat-engine", "heroPhase") ?? 1;
     const currentSegment = canvas.scene.getFlag("hero-combat-engine", "heroSegment") ?? 1;
 
-    // Build per-modifier rows with Edit / Remove buttons
+    // Build per-modifier rows with explicit duration and cancel controls.
     const activeModRows = activeMods.map((m, idx) => {
       const parts = formatCombatValueModParts(getCombatValueModsFromEntry(m), configuredStats);
       const remainingSegments = getCvModifierRemainingSegments(m, currentPhase, currentSegment);
       const appliedPhase = Number(m.appliedPhase);
       const appliedSegment = Number(m.appliedSegment);
-      const timingSuffix = Number.isFinite(appliedPhase) && Number.isFinite(appliedSegment)
-        ? `, applied ${appliedPhase}.${appliedSegment}`
-        : "";
-      const summary = `${parts.join(", ")} (${remainingSegments} seg${remainingSegments === 1 ? "" : "s"} left${timingSuffix})`;
-      return `<div style="display:flex;align-items:center;gap:6px;padding:2px 0;">
-        <span style="flex:1;">${summary}</span>
-        <button type="button" class="cv-mod-edit" data-mod-index="${idx}" title="Edit this modifier" style="flex-shrink:0;width:24px;height:24px;padding:0;line-height:24px;text-align:center;"><i class="fas fa-pen-to-square"></i></button>
-        <button type="button" class="cv-mod-remove" data-mod-index="${idx}" title="Remove this modifier" style="flex-shrink:0;width:24px;height:24px;padding:0;line-height:24px;text-align:center;"><i class="fas fa-trash"></i></button>
+      const appliedLabel = Number.isFinite(appliedPhase) && Number.isFinite(appliedSegment)
+        ? `${appliedPhase}.${appliedSegment}`
+        : "-";
+      return `<div style="display:grid;grid-template-columns:minmax(0,1fr) 110px 88px 64px;gap:8px;align-items:center;padding:4px 0;border-top:1px solid var(--color-border-light-tertiary);">
+        <span style="min-width:0;overflow-wrap:anywhere;">${parts.join(", ")}</span>
+        <span>${remainingSegments} seg${remainingSegments === 1 ? "" : "s"} left</span>
+        <span style="color:var(--color-text-dark-secondary);font-size:0.85em;">Applied ${appliedLabel}</span>
+        <span style="display:flex;justify-content:flex-end;gap:4px;">
+          <button type="button" class="cv-mod-edit" data-mod-index="${idx}" title="Edit this modifier" style="flex-shrink:0;width:24px;height:24px;padding:0;line-height:24px;text-align:center;"><i class="fas fa-pen-to-square"></i></button>
+          <button type="button" class="cv-mod-remove" data-mod-index="${idx}" title="Cancel this modifier" style="flex-shrink:0;padding:1px 8px;line-height:20px;text-align:center;">Cancel</button>
+        </span>
       </div>`;
     }).join("");
 
     const activeSection = activeMods.length
       ? `<div style="font-size:0.8em;padding:4px 6px;border:1px solid var(--color-border-light-secondary);border-radius:4px;">
-          <strong>Active modifiers:</strong>
+          <strong>Active modifiers</strong>
+          <div style="display:grid;grid-template-columns:minmax(0,1fr) 110px 88px 64px;gap:8px;align-items:center;margin-top:6px;padding-bottom:4px;font-weight:600;border-bottom:1px solid var(--color-border-light-secondary);">
+            <span>Modifier</span>
+            <span>Duration Left</span>
+            <span>Applied</span>
+            <span style="text-align:right;">Action</span>
+          </div>
           ${activeModRows}
           <div style="margin-top:4px;border-top:1px solid var(--color-border-light-secondary);padding-top:4px;">
-            <button type="button" class="cv-mod-clear-all" title="Remove all active modifiers" style="width:auto;padding:1px 8px;font-size:0.8em;"><i class="fas fa-trash-can"></i> Clear All</button>
+            <button type="button" class="cv-mod-clear-all" title="Cancel all active modifiers" style="width:auto;padding:1px 8px;font-size:0.8em;"><i class="fas fa-trash-can"></i> Cancel All</button>
           </div>
         </div>`
       : `<div style="font-size:0.8em;padding:4px 6px;border:1px solid var(--color-border-light-secondary);border-radius:4px;">
