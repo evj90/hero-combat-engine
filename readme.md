@@ -4,48 +4,42 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Latest Release](https://img.shields.io/github/v/release/evj90/hero-combat-engine)](https://github.com/evj90/hero-combat-engine/releases)
 
-An unofficial Foundry VTT v11 combat-tracker module for HERO System that replaces Foundry's default tracker, which is incompatible with HERO's phase/segment model.
+An unofficial Foundry VTT v11 combat-tracker module for HERO System that replaces Foundry's default tracker, which is incompatible with HERO's phase/segment model. It adds a floating controller panel per-scene that streamlines key elements of the HERO system.
 
-The module keeps combat state on scene flags, provides a floating controller panel for the table, and adds HERO-specific tools like Hold, Abort, pip-based stat bars, and segment-aware token highlighting.
-
-> HERO System is a trademark of HERO Games. This module is not affiliated with or endorsed by HERO Games.
+ > HERO System is a trademark of HERO Games. This module is not affiliated with or endorsed by HERO Games.
 I'm just a huge fan. 🤙
 
 ![HERO Combat Engine panel](images/screenshot_panel.png)
 
 ## Quick Start
-Assumes familiarity with Foundry
+Assumes familiarity with Foundry and/or Forge VTT.
 
-1. Download and enable the module. Latest stable release: `https://raw.githubusercontent.com/evj90/hero-combat-engine/main/module.json`
-2. Set the scene for action and adventure with tokens placed 
+1. Download and enable the module in your HERO Systems world. Latest stable release: `https://raw.githubusercontent.com/evj90/hero-combat-engine/main/module.json`
+2. Set the scene for action and adventure with tokens placed.
 3. Open the HERO Combat panel from the scene controls. The button loads after the scene is complete, so it may take a few seconds to appear.
 4. Click **Begin** to build the combat order from the selected tokens.
-5. Use the token and segment navigation controls to run the encounter.
-6. Click **End** when combat is over to clear combat state and close the tracker.
+5. Use segment navigation, token panels, active effects display, and modifier controls to fight for justice.
+6. See Configure Settings to explore options.
 
 ## What It Does
 
-- Replaces Foundry's linear initiative with HERO's 12-segment phase/segment combat flow.
-- Maintains DEX-sorted acting order with configurable END or EGO tie-break behavior.
-- Provides a floating tracker showing current segment, acting token, and full combat order.
-- Highlights active tokens across clients with segment-aware burst and glow effects.
-- Supports HERO actions and timing controls, including Hold, Release Hold, Abort, segment stepping, and post-Segment 12 recovery.
-- Displays configurable pip-style stat tracking for STUN, BODY, END, and optional PRE.
+- Adds a floating tracker to cycle through combat order with configurable highlights.
+- Displays configurable pip-style stat tracking 
 - Manages quick conditions, active effects, and combat state directly from the panel.
-- Gives GMs one-click combat controls to begin, add/remove tokens, and refresh order after stat changes.
+- Replaces Foundry's linear initiative with HERO's 12-segment phase/segment combat flow.
+- Supports HERO actions including Hold, Release Hold, Abort, segment stepping, and post-Segment 12 recovery.
 
 ## Why the Foundry Built-In Tracker Doesn't Quite Work Here
 
-- Assumes a linear initiative list — no concept of segments, phases, or the SPD chart.
+- No concept of segments, phases, or the SPD chart.
+- Assumes linear initiative ordered by die roll.
 - No support for Hold, Release Hold, or Abort in the turn model.
-- Sorts by initiative roll, not DEX with HERO-style tie-breaks.
 - No segment-aware token highlighting, stat pip bars, or per-combatant combat value tracking.
 
 ## Requirements
 
 - Foundry Virtual Tabletop v11. This is where it started. Input is welcome.
 - A HERO System world or actor data model that exposes HERO-style characteristics such as SPD, DEX, STUN, BODY, END, OCV, DCV, and MCV
-
 
 
 ### Manual / Direct Download
@@ -83,13 +77,13 @@ Download a ZIP and unpack it into your Foundry `Data/modules/` folder (the unpac
 ## Panel Workflow
 
 ### Top Navigation
-
+![HERO Top Navigation panel](images/top_navigation.png)
 - **Previous Segment / Next Segment** steps backward or forward through HERO timing.
 - **Previous Token / Next Token** moves within the current segment's acting order.
 - **Hide Non-Acting** toggles a filtered view so only relevant tokens remain visible.
 
 ### GM Controls
-
+![HERO GM Controls panel](images/gm_controls.png)
 - **Begin** starts a combat from selected tokens.
 - **Add** adds currently selected tokens to the active combat.
 - **Remove** removes currently selected tokens from the active combat.
@@ -98,7 +92,7 @@ Download a ZIP and unpack it into your Foundry `Data/modules/` folder (the unpac
 - **End** clears combat state and shuts the encounter down.
 
 ### Per-Combatant Controls
-
+![HERO GM Controls panel](images/combatant_control.png)
 - **Ping** and **Pan** jump the table to a token quickly.
 - **DCV Bonus** cycles DCV bonus stages, with right-click direct set (right-click indicators shown as blue dots).
 - **OCV Bonus** cycles OCV bonus stages, with right-click direct set (right-click indicators shown as blue dots).
@@ -110,16 +104,6 @@ Download a ZIP and unpack it into your Foundry `Data/modules/` folder (the unpac
 - **Recovery** takes recovery and ends the token's turn (highlighted as primary action).
 - **Done** ends the token's turn normally (highlighted as primary action).
 - **Remove from Combat** removes that token from the encounter.
-
-## Tracker Features
-
-### Combat Readout
-
-- Current segment display in `phase.segment` format with the acting token's name.
-- SPD values acting in the current segment.
-- Combatants sorted in HERO-friendly order.
-- Optional SPD column in the tracker.
-- Stale-token warning when stored combatants no longer exist on the canvas.
 
 ### Stat and Value Display
 
@@ -139,37 +123,18 @@ Download a ZIP and unpack it into your Foundry `Data/modules/` folder (the unpac
 
 ## Settings Highlights
 
-Many settings are available. The settings menu covers four main areas:
+Many configurations are available. The settings menu covers four main areas:
 
 - **Tracker behavior**: auto-open for players, auto-close on combat end, SPD column visibility, tracked pip characteristics with live preview, combat value characteristics with live preview, hide non-acting tokens, and accessibility sizing.
 - **Turn management**: player turn-ending permissions, skip warnings (including held-token loss warnings), automatic empty-segment skipping, incapacitated-token skipping, and DEX tie-break behavior.
 - **Visuals**: active highlight colors, incapacitated colors, burst settings, ring width, inset, glow radius, and glow intensity.
 - **Recovery and chat output**: token turn messages, segment summaries, skipped segment notices, post-segment 12 recovery messages, and configurable STUN/BODY recovery thresholds.
 
-## Accessibility
-
-- All interactive buttons include semantic `role` attributes and `aria-label` text for screen readers.
-- Right-clickable elements display small blue indicator dots for feature discovery.
-- Primary actions (End Turn, Take Recovery) are visually highlighted in green.
-- Settings inputs for characteristics show live preview of parsed results as you type.
-- Non-GM players see appropriate UI messaging (e.g., "Waiting for the GM to start combat") instead of disabled buttons.
-
 ## Usage Notes
 
-- This module does not rely on Foundry's normal combat turn order for timing; HERO timing is managed separately.
-- Do not run the built-in Foundry combat tracker in parallel with this module. Foundry's tracker assumes one linear initiative order, while HERO Combat Engine manages segment, phase, Hold, Abort, and acting-order state independently on scene flags. Using both at once can leave the visible tracker, active token, and actual HERO timing out of sync.
-- Combat state is stored on the current scene. Each scene can have only one. Combat may be active in more than one scene. 
-- If token changes taffecting combat order during combat, use **Refresh** to rebuild order from current values.
+- Using the built-in Foundry tracker with the HERO System can cause freezing. Using this with built-in tracker definitely won't help, and may result in the same freezing.
+- Combat state is stored with the scene. Each scene can have zero or one combats. Multiple scenes can have simultaneous combats. 
 - Depending on hosting, the toolbar button image can appear a few seconds after page load. On The Forge, CDN asset loading can delay that icon on first load.
-
-## Included Content
-
-- Floating HERO combat controller panel with segment/token navigation and GM controls
-- HERO segment timing and token-highlighting engine
-- Settings menu for tracker behavior, turn management, visuals, recovery, and chat output
-- Bundled macro compendium that includes:
-  - Core action macros: **HERO: Full Health**, **HERO: Grapple**, **HERO: Recover**, **HERO: Remove Status Effects**, **HERO: Rotate CW**, **HERO: Set Upright**
-  - Utility/lifecycle macros such as Begin/End Combat, Advance Segment, Highlight Acting, Next/Previous Token, and Mental Illusion Attack
 
 ## Contributing
 
