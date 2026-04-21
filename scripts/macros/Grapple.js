@@ -40,6 +40,66 @@ const INLINE_TEMPLATE = `
 </div>
 `;
 
+const MODULE_ID = "hero-combat-engine";
+const GRAPPLE_FLAG = "grapple";
+const GRAPPLE_EFFECT_TYPES = {
+  grabbed: "grabbed",
+  targetPinned: "targetPinned",
+  grapplerPinning: "grapplerPinning"
+};
+
+function getPairKey(grappler, target) {
+  return `${grappler.document.uuid}->${target.document.uuid}`;
+}
+
+function canModifyActor(actor) {
+  if (!actor) return false;
+  if (game.user?.isGM) return true;
+  if (typeof actor.canUserModify === "function") {
+    return actor.canUserModify(game.user, "update");
+  }
+  return Boolean(actor.isOwner);
+}
+
+function getGrappleState(effect) {
+  return effect?.getFlag?.(MODULE_ID, GRAPPLE_FLAG) ?? null;
+}
+
+function getGrappleEffects(actor, pairKey, type) {
+  return (actor?.effects ?? []).filter(effect => {
+    const state = getGrappleState(effect);
+    return state?.pairKey === pairKey && (!type || state.type === type);
+  });
+}
+
+async function deleteEffects(effects) {
+  for (const effect of effects) {
+    await effect.delete();
+  }
+}
+
+function createGrappleEffectData({ label, icon, changes, pairKey, type, grappler, target, appliedDelta = null }) {
+  return {
+    label,
+    icon,
+    changes,
+    origin: grappler.actor?.uuid,
+    flags: {
+      [MODULE_ID]: {
+        [GRAPPLE_FLAG]: {
+          pairKey,
+          type,
+          grapplerActorUuid: grappler.actor?.uuid,
+          grapplerTokenUuid: grappler.document.uuid,
+          targetActorUuid: target.actor?.uuid,
+          targetTokenUuid: target.document.uuid,
+          appliedDelta
+        }
+      }
+    }
+  };
+}
+
 // ===============================
 // APPLICATION CLASS
 // ===============================
@@ -50,6 +110,7 @@ class GrappleTracker extends Application {
     this.target = target;
     this.gSTR = gSTR;
     this.tSTR = tSTR;
+    this.pairKey = getPairKey(grappler, target);
 
     this.lastG = null;   // last grappler roll
     this.lastT = null;   // last target roll
@@ -85,6 +146,11 @@ class GrappleTracker extends Application {
       lastT: this.lastT,
       bar: this.buildBar()
     };
+  }
+
+  async _render(force, options) {
+    await super._render(force, options);
+    await this.syncPinEffects();
   }
 
 buildBar() {
@@ -139,6 +205,58 @@ buildBar() {
     html.find("#drag").on("click", () => this.dragTarget());
   }
 
+  async clearEffects(types = []) {
+    const scopedTypes = Array.isArray(types) && types.length ? new Set(types) : null;
+    const targetEffects = getGrappleEffects(this.target.actor, this.pairKey).filter(effect => {
+      if (!scopedTypes) return true;
+      return scopedTypes.has(getGrappleState(effect)?.type);
+    });
+    const grapplerEffects = getGrappleEffects(this.grappler.actor, this.pairKey).filter(effect => {
+      if (!scopedTypes) return true;
+      return scopedTypes.has(getGrappleState(effect)?.type);
+    });
+
+    await deleteEffects(targetEffects);
+    await deleteEffects(grapplerEffects);
+  }
+
+  async syncPinEffects() {
+    const targetPinned = getGrappleEffects(this.target.actor, this.pairKey, GRAPPLE_EFFECT_TYPES.targetPinned)[0];
+    if (targetPinned) {
+      const state = getGrappleState(targetPinned) ?? {};
+      const currentDcv = Number(this.target.actor?.system?.characteristics?.dcv?.value ?? 0);
+      const previousDelta = Number(state.appliedDelta ?? 0);
+      const baseDcv = currentDcv - previousDelta;
+      const nextDelta = -Math.max(0, baseDcv);
+      if (nextDelta !== previousDelta) {
+        await targetPinned.update({
+          changes: [
+            { key: "system.characteristics.dcv.value", mode: CONST.ACTIVE_EFFECT_MODES.ADD, value: nextDelta }
+          ],
+          [`flags.${MODULE_ID}.${GRAPPLE_FLAG}.appliedDelta`]: nextDelta
+        });
+      }
+    }
+
+    const grapplerPinning = getGrappleEffects(this.grappler.actor, this.pairKey, GRAPPLE_EFFECT_TYPES.grapplerPinning)[0];
+    if (grapplerPinning) {
+      const state = getGrappleState(grapplerPinning) ?? {};
+      const currentDcv = Number(this.grappler.actor?.system?.characteristics?.dcv?.value ?? 0);
+      const previousDelta = Number(state.appliedDelta ?? 0);
+      const baseDcv = currentDcv - previousDelta;
+      const nextValue = Math.floor(Math.max(0, baseDcv) / 2);
+      const nextDelta = nextValue - baseDcv;
+      if (nextDelta !== previousDelta) {
+        await grapplerPinning.update({
+          changes: [
+            { key: "system.characteristics.dcv.value", mode: CONST.ACTIVE_EFFECT_MODES.ADD, value: nextDelta }
+          ],
+          [`flags.${MODULE_ID}.${GRAPPLE_FLAG}.appliedDelta`]: nextDelta
+        });
+      }
+    }
+  }
+
 async _roll3d6(token, str, flavor) {
   const roll = new Roll("3d6");
   await roll.evaluate({async: true});
@@ -176,9 +294,14 @@ async squeeze() {
   const str = this.gSTR;
   const dice = Math.floor(str / 5); // STR/5 = damage dice
 
+  if (dice <= 0) {
+    ui.notifications.warn(`${this.grappler.name} does not have enough STR to squeeze for damage.`);
+    return;
+  }
+
   const roll = new Roll(`${dice}d6`);
   await roll.evaluate({async: true});
-  roll.toMessage({
+  await roll.toMessage({
     flavor: `${this.grappler.name} squeezes ${this.target.name} for ${dice}d6 Normal Damage`,
     speaker: null
   });
@@ -206,37 +329,51 @@ async throwTarget() {
   if (kbDice > 0) {
     const roll = new Roll(`${kbDice}d6`);
     await roll.evaluate({async: true});
-    roll.toMessage({
+    await roll.toMessage({
       flavor: `${this.target.name} takes ${kbDice}d6 Knockback Damage`,
       speaker: null
     });
   }
 
-  this.release();
+  await this.release();
 }
 
 async pinTarget() {
-  // Apply DCV 0 to target
-  await this.target.actor.createEmbeddedDocuments("ActiveEffect", [{
+  await this.clearEffects([GRAPPLE_EFFECT_TYPES.targetPinned, GRAPPLE_EFFECT_TYPES.grapplerPinning]);
+
+  const targetBaseDcv = Number(this.target.actor.system?.characteristics?.dcv?.value ?? 0);
+  const targetDelta = -Math.max(0, targetBaseDcv);
+  const grapplerBaseDcv = Number(this.grappler.actor.system?.characteristics?.dcv?.value ?? 0);
+  const halfDcv = Math.floor(Math.max(0, grapplerBaseDcv) / 2);
+  const grapplerDelta = halfDcv - grapplerBaseDcv;
+
+  await this.target.actor.createEmbeddedDocuments("ActiveEffect", [createGrappleEffectData({
     label: "Pinned (DCV 0)",
     icon: "icons/svg/anchor.svg",
     changes: [
-      { key: "system.characteristics.dcv.value", mode: CONST.ACTIVE_EFFECT_MODES.OVERRIDE, value: 0 }
+      { key: "system.characteristics.dcv.value", mode: CONST.ACTIVE_EFFECT_MODES.ADD, value: targetDelta }
     ],
-    origin: this.grappler.actor.uuid
-  }]);
+    pairKey: this.pairKey,
+    type: GRAPPLE_EFFECT_TYPES.targetPinned,
+    grappler: this.grappler,
+    target: this.target,
+    appliedDelta: targetDelta
+  })]);
 
-  // Apply half DCV to grappler
-  const halfDCV = Math.floor(this.grappler.actor.system.characteristics.dcv.value / 2);
-
-  await this.grappler.actor.createEmbeddedDocuments("ActiveEffect", [{
+  await this.grappler.actor.createEmbeddedDocuments("ActiveEffect", [createGrappleEffectData({
     label: "Pinning (½ DCV)",
     icon: "icons/svg/anchor.svg",
     changes: [
-      { key: "system.characteristics.dcv.value", mode: CONST.ACTIVE_EFFECT_MODES.OVERRIDE, value: halfDCV }
+      { key: "system.characteristics.dcv.value", mode: CONST.ACTIVE_EFFECT_MODES.ADD, value: grapplerDelta }
     ],
-    origin: this.target.actor.uuid
-  }]);
+    pairKey: this.pairKey,
+    type: GRAPPLE_EFFECT_TYPES.grapplerPinning,
+    grappler: this.grappler,
+    target: this.target,
+    appliedDelta: grapplerDelta
+  })]);
+
+  await this.syncPinEffects();
 
   ui.notifications.info(`${this.grappler.name} pins ${this.target.name}!`);
 }
@@ -260,7 +397,7 @@ async dragTarget() {
 
     if (t.total > g.total) {
       ui.notifications.info(`${this.target.name} BREAKS FREE!`);
-      this.release();
+      await this.release();
     } else {
       ui.notifications.warn(`${this.target.name} fails to break free.`);
       this.render(false);
@@ -268,8 +405,7 @@ async dragTarget() {
   }
 
   async release() {
-    const effect = this.target.actor.effects.find(e => e.label === "Grabbed (-2 DCV)");
-    if (effect) await effect.delete();
+    await this.clearEffects();
     this.close();
   }
 }
@@ -287,9 +423,9 @@ export async function run() {
     return;
   }
 
-  const targets = canvas.tokens.placeables.filter(t => t.id !== grappler.id);
+  const targets = canvas.tokens.placeables.filter(t => t.id !== grappler.id && t.actor && canModifyActor(t.actor));
   if (!targets.length) {
-    ui.notifications.warn("No other tokens found to grab.");
+    ui.notifications.warn("No writable target tokens found to grab.");
     return;
   }
 
@@ -314,12 +450,25 @@ export async function run() {
             return;
           }
 
-          await targetActor.createEmbeddedDocuments("ActiveEffect", [{
+          if (!canModifyActor(targetActor)) {
+            ui.notifications.error(`You do not have permission to apply grapple effects to ${target.name}.`);
+            return;
+          }
+
+          const pairKey = getPairKey(grappler, target);
+          await deleteEffects(getGrappleEffects(targetActor, pairKey));
+          await deleteEffects(getGrappleEffects(grapplerActor, pairKey));
+
+          await targetActor.createEmbeddedDocuments("ActiveEffect", [createGrappleEffectData({
             label: "Grabbed (-2 DCV)",
             icon: "icons/svg/net.svg",
             changes: [{ key: "system.characteristics.dcv.value", mode: CONST.ACTIVE_EFFECT_MODES.ADD, value: -2 }],
-            origin: grapplerActor.uuid
-          }]);
+            pairKey,
+            type: GRAPPLE_EFFECT_TYPES.grabbed,
+            grappler,
+            target,
+            appliedDelta: -2
+          })]);
 
           const gSTR = grapplerActor.system.characteristics.str.value;
           const tSTR = targetActor.system.characteristics.str.value;
