@@ -1,5 +1,5 @@
 ﻿import { segmentAdvance, nextActingToken, previousActingToken, previousSegment, endTokenSegment, holdToken, releaseHold } from "./segment-engine.js";
-import { HeroControllerPanel } from "./controller-panel.js";
+import { HeroControllerPanel, registerEntangleAttackChatHandlers } from "./controller-panel.js";
 import { HeroCombatSettingsMenu } from "./settings-menu.js";
 import { beginCombat, addSelectedTokens, refreshCombatOrder } from "./begin-combat.js";
 import { highlightActing, registerHighlightSocketListener, clearHighlights } from "./highlight.js";
@@ -376,6 +376,7 @@ Hooks.once("init", () => {
 
 Hooks.once("ready", async () => {
   registerMentalIllusionChatHandlers();
+  registerEntangleAttackChatHandlers();
   registerAttackSheetTooltips();
 
   // Load bucket descriptions from editable JSON file in the module folder.

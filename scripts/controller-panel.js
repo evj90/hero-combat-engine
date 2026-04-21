@@ -536,10 +536,27 @@ function createCombatChatMessage(content, phase, segment, extraData = {}) {
   });
 }
 
+function createGmOnlyCombatChatMessage(content, phase, segment, extraData = {}) {
+  const whisper = ChatMessage.getWhisperRecipients("GM").map(user => user.id);
+  return createCombatChatMessage(content, phase, segment, {
+    ...extraData,
+    whisper
+  });
+}
+
 function isDisabledControl(element) {
   return element?.classList?.contains("disabled")
     || element?.classList?.contains("read-only")
     || element?.getAttribute?.("aria-disabled") === "true";
+}
+
+function canUserControlToken(token) {
+  if (!token) return false;
+  if (game.user.isGM) return true;
+  if (typeof token.document?.canUserModify === "function") {
+    return token.document.canUserModify(game.user, "update");
+  }
+  return Boolean(token.actor?.isOwner);
 }
 
 export class HeroControllerPanel extends Application {
@@ -737,6 +754,7 @@ export class HeroControllerPanel extends Application {
         quickStatuses: (() => {
           const activeIDs = actor.statuses ?? new Set(actor.effects.flatMap(e => [...(e.statuses ?? [])]));
           const cfgMap = Object.fromEntries((CONFIG.statusEffects ?? []).map(s => [s.id, s.icon]));
+          const hasEntangleBody = (token.document.getFlag("hero-combat-engine", "entangleBody") ?? 0) > 0;
           return HERO_QUICK_STATUSES.map(s => {
             const active = activeIDs.has(s.id);
             const entry = {
@@ -744,7 +762,7 @@ export class HeroControllerPanel extends Application {
               label: s.label,
               icon: cfgMap[s.id] ?? s.fallbackIcon,
               active,
-              showInTracker: s.id !== "prone",
+              showInTracker: s.id === "prone" ? false : (isEntangleStatus(s.id) ? (active || hasEntangleBody) : true),
               canToggle: isPrivileged() || isOwnedByCurrentUser
             };
             if (active) {
@@ -797,8 +815,10 @@ export class HeroControllerPanel extends Application {
 
     html.find(".token-image").on("contextmenu", async (e) => {
       if (isDisabledControl(e.currentTarget)) return;
-      e.preventDefault();
       const tokenId = e.currentTarget.closest('[data-token-id]').dataset.tokenId;
+      const token = canvas.tokens.get(tokenId);
+      if (!canUserControlToken(token)) return;
+      e.preventDefault();
       if (canDirectlyUpdateScene()) {
         await this._insertTokenAtFront(tokenId);
       } else {
@@ -1085,16 +1105,20 @@ export class HeroControllerPanel extends Application {
 
     html.find(".hero-status-btn.active").on("contextmenu", async (e) => {
       if (isDisabledControl(e.currentTarget)) return;
-      e.preventDefault();
       const tokenId  = e.currentTarget.dataset.tokenId;
+      const token = canvas.tokens.get(tokenId);
+      if (!canUserControlToken(token)) return;
+      e.preventDefault();
       const statusId = e.currentTarget.dataset.statusId;
       await this._openStatusTrackerDialog(tokenId, statusId);
     });
 
     html.find(".hero-adjustment-badge").on("contextmenu", async (e) => {
       if (isDisabledControl(e.currentTarget)) return;
-      e.preventDefault();
       const tokenId = e.currentTarget.dataset.tokenId;
+      const token = canvas.tokens.get(tokenId);
+      if (!canUserControlToken(token)) return;
+      e.preventDefault();
       const adjId   = e.currentTarget.dataset.adjId;
       await this._openAdjustmentDialog(tokenId, adjId);
     });
@@ -1108,9 +1132,10 @@ export class HeroControllerPanel extends Application {
 
     html.find(".hero-entangle-badge").on("contextmenu", async (e) => {
       if (isDisabledControl(e.currentTarget)) return;
-      e.preventDefault();
       const tokenId = e.currentTarget.dataset.tokenId;
       const token = canvas.tokens.get(tokenId);
+      if (!canUserControlToken(token)) return;
+      e.preventDefault();
       await this._openEntangleDialog(tokenId, getPreferredEntangleStatusId(token?.actor));
     });
 
@@ -1119,6 +1144,8 @@ export class HeroControllerPanel extends Application {
     html.find(".hero-cv-stack").each((_, el) => {
       el.addEventListener("contextmenu", async (e) => {
         if (isDisabledControl(el)) return;
+        const token = canvas.tokens.get(el.dataset.tokenId);
+        if (!canUserControlToken(token)) return;
         e.preventDefault();
         e.stopPropagation();
         await this._openCvAdjustmentDialog(el.dataset.tokenId);
@@ -1207,31 +1234,31 @@ export class HeroControllerPanel extends Application {
 
     html.find(".hero-cover-btn:not(.hero-ocv-btn):not(.hero-mcv-btn)").on("contextmenu", async (e) => {
       if (isDisabledControl(e.currentTarget)) return;
-      e.preventDefault();
       const tokenId = e.currentTarget.dataset.tokenId;
       const token = canvas.tokens.get(tokenId);
       if (!token?.actor) return;
-      if (!isPrivileged() && !token.actor.isOwner) return;
+      if (!canUserControlToken(token)) return;
+      e.preventDefault();
       await this._openCoverDialog(tokenId);
     });
 
     html.find(".hero-ocv-btn").on("contextmenu", async (e) => {
       if (isDisabledControl(e.currentTarget)) return;
-      e.preventDefault();
       const tokenId = e.currentTarget.dataset.tokenId;
       const token = canvas.tokens.get(tokenId);
       if (!token?.actor) return;
-      if (!isPrivileged() && !token.actor.isOwner) return;
+      if (!canUserControlToken(token)) return;
+      e.preventDefault();
       await this._openOcvBonusDialog(tokenId);
     });
 
     html.find(".hero-mcv-btn").on("contextmenu", async (e) => {
       if (isDisabledControl(e.currentTarget)) return;
-      e.preventDefault();
       const tokenId = e.currentTarget.dataset.tokenId;
       const token = canvas.tokens.get(tokenId);
       if (!token?.actor) return;
-      if (!isPrivileged() && !token.actor.isOwner) return;
+      if (!canUserControlToken(token)) return;
+      e.preventDefault();
       await this._openMcvBonusDialog(tokenId);
     });
 
@@ -1999,137 +2026,37 @@ export class HeroControllerPanel extends Application {
     const toHitRoll = await (new Roll("3d6")).evaluate({ async: true });
     const hit = toHitRoll.total <= targetNumber;
 
-    createCombatChatMessage(
-      `<strong>${token.name}</strong> attacks Entangle with <strong>${chosen.label}</strong>: rolled <strong>${toHitRoll.total}</strong> vs target <strong>${targetNumber}</strong> (${hit ? "HIT" : "MISS"}).`,
-      phase,
-      segment,
-      { roll: toHitRoll }
-    );
-
-    if (!hit) return;
-
-    let suggestedDamage = "";
-    let suggestedDefense = "0";
-    let lastDamageRoll = null;
-
-    while (true) {
-      const damageResult = await new Promise(resolve => {
-        new Dialog({
-          title: `Apply Entangle Damage — ${token.name}`,
-          content: `
-            <div style="display:grid;gap:8px;margin-top:4px;">
-              <p style="margin:0;font-size:0.85em;color:var(--color-text-dark-secondary);">
-                Enter BODY dealt to Entangle. Remaining BODY: <strong>${currentBody}</strong>.
-              </p>
-              <div style="display:flex;align-items:center;gap:8px;">
-                <label style="min-width:130px;flex-shrink:0;">BODY damage:</label>
-                <input type="number" id="ent-dmg" value="${suggestedDamage || "0"}" min="0" style="width:80px;" autofocus/>
-              </div>
-              <div style="display:flex;align-items:center;gap:8px;">
-                <label style="min-width:130px;flex-shrink:0;">Defense applied:</label>
-                <input type="number" id="ent-defense" value="${suggestedDefense}" min="0" style="width:80px;"/>
-              </div>
-              <p style="margin:0;font-size:0.8em;color:var(--color-text-dark-secondary);">Attack formula: ${chosen.damageFormula ? `<code>${chosen.damageFormula}</code>` : "none on selected attack"}${lastDamageRoll ? ` (last roll total ${lastDamageRoll.total})` : ""}</p>
-            </div>
-          `,
-          buttons: {
-            apply: {
-              icon: '<i class="fas fa-check"></i>',
-              label: "Apply Damage",
-              callback: html => resolve({
-                action: "apply",
-                bodyDamage: parseInt(html.find("#ent-dmg").val()) || 0,
-                defenseApplied: parseInt(html.find("#ent-defense").val()) || 0
-              })
-            },
-            rollDamage: {
-              icon: '<i class="fas fa-dice"></i>',
-              label: "Roll Damage",
-              callback: html => resolve({
-                action: "rollDamage",
-                defenseApplied: parseInt(html.find("#ent-defense").val()) || 0
-              })
-            },
-            cancel: { label: "Cancel", callback: () => resolve(null) }
-          },
-          default: "apply"
-        }).render(true);
-      });
-
-      if (!damageResult) return;
-
-      suggestedDefense = String(Math.max(0, asNumber(damageResult.defenseApplied, 0)));
-
-      if (damageResult.action === "rollDamage") {
-        try {
-          let formula = chosen.damageFormula;
-          if (!formula) {
-            const customFormula = await new Promise(resolve => {
-              new Dialog({
-                title: `Roll Damage Formula — ${token.name}`,
-                content: `
-                  <div style="display:flex;align-items:center;gap:8px;">
-                    <label style="min-width:120px;flex-shrink:0;">Damage formula:</label>
-                    <input type="text" id="ent-dmg-formula" value="${suggestedDamage && /^\d+$/.test(suggestedDamage) ? `${suggestedDamage}` : "3d6"}" style="width:120px;" autofocus/>
-                  </div>
-                `,
-                buttons: {
-                  roll: { label: "Roll", callback: html => resolve(String(html.find("#ent-dmg-formula").val() ?? "").trim()) },
-                  cancel: { label: "Cancel", callback: () => resolve(null) }
-                },
-                default: "roll"
-              }).render(true);
-            });
-            if (!customFormula) continue;
-            formula = customFormula;
-          }
-
-          lastDamageRoll = await (new Roll(formula)).evaluate({ async: true });
-          suggestedDamage = String(lastDamageRoll.total ?? 0);
-          createCombatChatMessage(
-            `<strong>${token.name}</strong> damage roll for Entangle attack (${chosen.label}). Apply defense, then confirm net BODY in the dialog.`,
-            phase,
-            segment,
-            { roll: lastDamageRoll }
-          );
-        } catch (err) {
-          ui.notifications.error(`Invalid damage formula. Enter BODY manually or try another formula.`);
-          console.error("[HERO ERROR] Entangle damage roll failed:", err);
-        }
-        continue;
-      }
-
-      if (damageResult.action !== "apply") return;
-
-      const bodyDamage = Math.max(0, asNumber(damageResult.bodyDamage, 0));
-      const defenseApplied = Math.max(0, asNumber(damageResult.defenseApplied, 0));
-      const netBodyDamage = Math.max(0, bodyDamage - defenseApplied);
-      const remaining = Math.max(0, currentBody - netBodyDamage);
-
-      if (remaining <= 0) {
-        await token.document.unsetFlag("hero-combat-engine", "entangleBody");
-        for (const clearId of clearStatusIds) {
-          const effectData = CONFIG.statusEffects?.find(e => e.id === clearId);
-          if (!effectData) continue;
-          const isEntangled = actor.statuses?.has(clearId) ?? actor.effects.some(e => [...(e.statuses ?? [])].includes(clearId));
-          if (!isEntangled) continue;
-          if (typeof actor.toggleStatusEffect === "function") await actor.toggleStatusEffect(clearId);
-          else await token.toggleEffect(effectData);
-        }
-          createCombatChatMessage(`<strong>${token.name}</strong> takes ${netBodyDamage} BODY to Entangle after ${defenseApplied} defense (${bodyDamage} rolled) and breaks free.`, phase, segment);
-      } else {
-        await token.document.setFlag("hero-combat-engine", "entangleBody", remaining);
-          createCombatChatMessage(`<strong>${token.name}</strong> takes ${netBodyDamage} BODY to Entangle after ${defenseApplied} defense (${bodyDamage} rolled). ${remaining} BODY remaining.`, phase, segment);
-      }
-      break;
+    if (!hit) {
+      createCombatChatMessage(
+        `<strong>${token.name}</strong> attacks Entangle with <strong>${chosen.label}</strong>: rolled <strong>${toHitRoll.total}</strong> vs target <strong>${targetNumber}</strong> — <strong>MISS</strong>.`,
+        phase, segment, { roll: toHitRoll }
+      );
+      return;
     }
+
+    const hitContent = `<strong>${token.name}</strong> attacks Entangle with <strong>${chosen.label}</strong>: rolled <strong>${toHitRoll.total}</strong> vs target <strong>${targetNumber}</strong> — <strong>HIT!</strong>
+      <div style="margin-top:8px;text-align:center;">
+        <button class="hero-entangle-roll-damage" type="button" style="margin:4px;">
+          <i class="fas fa-dice"></i> Roll Damage
+        </button>
+      </div>`;
+
+    const chatMsg = await createCombatChatMessage(hitContent, phase, segment, { roll: toHitRoll });
+    await chatMsg.setFlag("hero-combat-engine", "entangleAttack", {
+      tokenId,
+      statusId,
+      currentBody,
+      clearStatusIds,
+      damageFormula: chosen.damageFormula || "",
+      attackLabel: chosen.label
+    });
   }
 
   async _openCvAdjustmentDialog(tokenId) {
     const token = canvas.tokens.get(tokenId);
     const actor = token?.actor;
     if (!token || !actor) return;
-    if (!isPrivileged() && !actor.isOwner) return;
+    if (!canUserControlToken(token)) return;
 
     const configuredStats = getCombatValueCharacteristics();
     const activeMods = token.document.getFlag("hero-combat-engine", "cvSegmentMods") ?? [];
@@ -2261,7 +2188,7 @@ export class HeroControllerPanel extends Application {
       if (Object.keys(updates).length) await actor.update(updates);
       await token.document.unsetFlag("hero-combat-engine", "cvSegmentMods");
 
-      createCombatChatMessage(`<strong>${token.name}</strong> combat value modifiers cleared.`, phase, segment);
+      createGmOnlyCombatChatMessage(`<strong>${token.name}</strong> combat value modifiers cleared.`, phase, segment);
 
       await this.render(true);
       return;
@@ -2288,7 +2215,7 @@ export class HeroControllerPanel extends Application {
       }
 
       const parts = formatCombatValueModParts(modDeltas, configuredStats);
-      createCombatChatMessage(`<strong>${token.name}</strong> modifier removed: ${parts.join(", ")}.`, phase, segment);
+      createGmOnlyCombatChatMessage(`<strong>${token.name}</strong> modifier removed: ${parts.join(", ")}.`, phase, segment);
 
       await this.render(true);
       return;
@@ -2381,7 +2308,7 @@ export class HeroControllerPanel extends Application {
       await token.document.setFlag("hero-combat-engine", "cvSegmentMods", updated);
 
       const parts = formatCombatValueModParts(editResult.statMods, configuredStats);
-      createCombatChatMessage(`<strong>${token.name}</strong> modifier updated: ${parts.join(", ")} for ${editResult.segments} segment${editResult.segments === 1 ? "" : "s"}.`, phase, segment);
+      createGmOnlyCombatChatMessage(`<strong>${token.name}</strong> modifier updated: ${parts.join(", ")} for ${editResult.segments} segment${editResult.segments === 1 ? "" : "s"}.`, phase, segment);
 
       await this.render(true);
       return;
@@ -2406,7 +2333,7 @@ export class HeroControllerPanel extends Application {
 
     const parts = formatCombatValueModParts(result.statMods, configuredStats);
 
-    createCombatChatMessage(`<strong>${token.name}</strong> temporary combat value mod applied: ${parts.join(", ")} for ${segments} segment${segments === 1 ? "" : "s"}.`, phase, segment);
+    createGmOnlyCombatChatMessage(`<strong>${token.name}</strong> temporary combat value mod applied: ${parts.join(", ")} for ${segments} segment${segments === 1 ? "" : "s"}.`, phase, segment);
 
     await this.render(true);
   }
@@ -2548,4 +2475,126 @@ export class HeroControllerPanel extends Application {
     // Refresh the tracker UI to show the new order
     await this.render(true);
   }
+}
+
+// ── Entangle Attack chat-button handler ─────────────────────────
+export function registerEntangleAttackChatHandlers() {
+  Hooks.on("renderChatMessage", (message, html) => {
+    const button = html[0]?.querySelector?.(".hero-entangle-roll-damage");
+    if (!button) return;
+
+    const payload = message.getFlag("hero-combat-engine", "entangleAttack");
+    if (!payload) { button.disabled = true; return; }
+
+    if (payload.applied) {
+      button.disabled = true;
+      button.textContent = "Damage Applied";
+      return;
+    }
+
+    if (!game.user.isGM && !canvas.tokens.get(payload.tokenId)?.actor?.isOwner) {
+      button.disabled = true;
+      button.title = "Owner or GM can roll damage.";
+      return;
+    }
+
+    button.addEventListener("click", async (ev) => {
+      ev.preventDefault();
+      button.disabled = true;
+
+      const { tokenId, statusId, clearStatusIds, damageFormula, attackLabel } = payload;
+      const token = canvas.tokens.get(tokenId);
+      const actor = token?.actor;
+      if (!token || !actor) {
+        ui.notifications.warn("Token not found.");
+        return;
+      }
+
+      const phase   = canvas.scene.getFlag("hero-combat-engine", "heroPhase")   ?? 1;
+      const segment = canvas.scene.getFlag("hero-combat-engine", "heroSegment") ?? 1;
+
+      // Resolve damage formula
+      let formula = damageFormula;
+      if (!formula) {
+        formula = await new Promise(resolve => {
+          new Dialog({
+            title: `Damage Formula — ${token.name}`,
+            content: `<div style="display:flex;align-items:center;gap:8px;">
+              <label style="min-width:120px;flex-shrink:0;">Damage formula:</label>
+              <input type="text" id="ent-dmg-formula" value="3d6" style="width:120px;" autofocus/>
+            </div>`,
+            buttons: {
+              roll: { label: "Roll", callback: h => resolve(String(h.find("#ent-dmg-formula").val() ?? "").trim()) },
+              cancel: { label: "Cancel", callback: () => resolve(null) }
+            },
+            default: "roll"
+          }).render(true);
+        });
+        if (!formula) { button.disabled = false; return; }
+      }
+
+      let damageRoll;
+      try {
+        damageRoll = await (new Roll(formula)).evaluate({ async: true });
+      } catch (err) {
+        ui.notifications.error("Invalid damage formula.");
+        console.error("[HERO ERROR] Entangle damage roll failed:", err);
+        button.disabled = false;
+        return;
+      }
+
+      const bodyDamage = damageRoll.total ?? 0;
+
+      createCombatChatMessage(
+        `<strong>${token.name}</strong> rolls <strong>${bodyDamage}</strong> BODY damage to Entangle (${attackLabel}).`,
+        phase, segment, { roll: damageRoll }
+      );
+
+      // Prompt for defense
+      const defenseResult = await new Promise(resolve => {
+        new Dialog({
+          title: `Apply Entangle Damage — ${token.name}`,
+          content: `<div style="display:grid;gap:8px;margin-top:4px;">
+            <p style="margin:0;font-size:0.85em;">BODY rolled: <strong>${bodyDamage}</strong>. Entangle BODY remaining: <strong>${asNumber(token.document.getFlag("hero-combat-engine", "entangleBody"), 0)}</strong>.</p>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <label style="min-width:130px;flex-shrink:0;">Defense applied:</label>
+              <input type="number" id="ent-defense" value="0" min="0" style="width:80px;" autofocus/>
+            </div>
+          </div>`,
+          buttons: {
+            apply: { icon: '<i class="fas fa-check"></i>', label: "Apply", callback: h => resolve(parseInt(h.find("#ent-defense").val()) || 0) },
+            cancel: { label: "Cancel", callback: () => resolve(null) }
+          },
+          default: "apply"
+        }).render(true);
+      });
+
+      if (defenseResult === null) { button.disabled = false; return; }
+
+      const defenseApplied = Math.max(0, defenseResult);
+      const netBodyDamage  = Math.max(0, bodyDamage - defenseApplied);
+      const latestBody     = asNumber(token.document.getFlag("hero-combat-engine", "entangleBody"), 0);
+      const remaining      = Math.max(0, latestBody - netBodyDamage);
+
+      if (remaining <= 0) {
+        await token.document.unsetFlag("hero-combat-engine", "entangleBody");
+        for (const clearId of clearStatusIds) {
+          const effectData = CONFIG.statusEffects?.find(e => e.id === clearId);
+          if (!effectData) continue;
+          const isEntangled = actor.statuses?.has(clearId) ?? actor.effects.some(e => [...(e.statuses ?? [])].includes(clearId));
+          if (!isEntangled) continue;
+          if (typeof actor.toggleStatusEffect === "function") await actor.toggleStatusEffect(clearId);
+          else await token.toggleEffect(effectData);
+        }
+        createCombatChatMessage(`<strong>${token.name}</strong> takes ${netBodyDamage} BODY to Entangle after ${defenseApplied} defense (${bodyDamage} rolled) and breaks free.`, phase, segment);
+      } else {
+        await token.document.setFlag("hero-combat-engine", "entangleBody", remaining);
+        createCombatChatMessage(`<strong>${token.name}</strong> takes ${netBodyDamage} BODY to Entangle after ${defenseApplied} defense (${bodyDamage} rolled). ${remaining} BODY remaining.`, phase, segment);
+      }
+
+      await message.setFlag("hero-combat-engine", "entangleAttack.applied", true);
+      button.textContent = "Damage Applied";
+      game.heroCombat?.panel?.render(true);
+    });
+  });
 }
