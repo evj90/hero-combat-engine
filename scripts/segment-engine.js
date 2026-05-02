@@ -507,7 +507,24 @@ export async function nextActingToken() {
     return;
   }
   const currentIndex = getCurrentActingIndex();
-  const nextIndex = currentIndex + 1;
+  let nextIndex = currentIndex + 1;
+  const aborted = canvas.scene.getFlag("hero-combat-engine", "hero-combat.abortedTokens") ?? [];
+  if (aborted.length) {
+    const abortedSet = new Set(aborted);
+    const skippedIds = [];
+    while (nextIndex < actingTokens.length && abortedSet.has(actingTokens[nextIndex]?.id)) {
+      const skippedId = actingTokens[nextIndex]?.id;
+      if (skippedId) {
+        skippedIds.push(skippedId);
+        abortedSet.delete(skippedId);
+      }
+      nextIndex += 1;
+    }
+    if (skippedIds.length) {
+      await canvas.scene.setFlag("hero-combat-engine", "hero-combat.abortedTokens", [...abortedSet]);
+    }
+  }
+
   if (nextIndex >= actingTokens.length) {
     heroLog("nextActingToken advancing to next segment from last actor");
     await segmentAdvance({ skipWarning: true });
@@ -572,12 +589,6 @@ export async function endTokenSegment(tokenId) {
   }
 
   heroLog("endTokenSegment for token", tokenId, "at index", currentIndex);
-
-  // Clear abort flag for the token that just acted
-  const aborted = canvas.scene.getFlag("hero-combat-engine", "hero-combat.abortedTokens") ?? [];
-  if (aborted.includes(tokenId)) {
-    await canvas.scene.setFlag("hero-combat-engine", "hero-combat.abortedTokens", aborted.filter(id => id !== tokenId));
-  }
 
   await nextActingToken();
 }
@@ -695,6 +706,10 @@ export async function segmentAdvance({ skipWarning = false } = {}) {
   const aborted = canvas.scene.getFlag("hero-combat-engine", "hero-combat.abortedTokens") ?? [];
   if (aborted.length) {
     await canvas.scene.setFlag("hero-combat-engine", "hero-combat.abortedTokens", []);
+  }
+  const abortReturnMap = canvas.scene.getFlag("hero-combat-engine", "hero-combat.abortReturnMap") ?? {};
+  if (Object.keys(abortReturnMap).length) {
+    await canvas.scene.setFlag("hero-combat-engine", "hero-combat.abortReturnMap", {});
   }
 
   // Clear any per-segment acting order set by releaseHold.

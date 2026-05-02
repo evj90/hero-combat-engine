@@ -9,7 +9,7 @@ assignees: ''
 
 ## Environment
 - **Foundry VTT Version:** (e.g., 11.305)
-- **Module Version:** (e.g., 1.1.0)
+- **Module Version:** (e.g., 1.2.0)
 - **Game System:** (e.g., D&D 5e, Pathfinder 2e, or HERO System)
 - **Browser/Platform:** (e.g., Chrome on Windows, Firefox on Mac)
 

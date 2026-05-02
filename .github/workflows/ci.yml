@@ -35,19 +35,15 @@ jobs:
         run: |
           node_version=$(node --version 2>/dev/null || echo "none")
           echo "Node: $node_version"
-          # Parse-check each JS file; exit non-zero on error
+          # Parse-check each JS file without executing it.
           find scripts -name "*.js" | while read f; do
-            node --input-type=module < "$f" 2>&1 | grep -v "^$" || true
-            node -e "
-              const fs = require('fs');
-              try {
-                new Function(fs.readFileSync('$f', 'utf8'));
-                process.stdout.write('OK: $f\n');
-              } catch(e) {
-                process.stderr.write('FAIL: $f — ' + e.message + '\n');
-                process.exit(1);
-              }
-            "
+            if node --check "$f" >/dev/null 2>&1; then
+              echo "OK: $f"
+            else
+              echo "FAIL: $f"
+              node --check "$f"
+              exit 1
+            fi
           done
 
       - name: Validate version tag consistency

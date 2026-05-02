@@ -8,7 +8,6 @@ const HERO_QUICK_STATUSES = [
   { id: "prone",       label: "Prone — −2 OCV/DCV, half phase to stand",        fallbackIcon: "icons/svg/falling.svg"     },
   { id: "blind",       label: "Flashed (Sight) — sight blocked",                 fallbackIcon: "icons/svg/blind.svg"       },
   { id: "deaf",        label: "Flashed (Hearing) — hearing blocked",              fallbackIcon: "icons/svg/deaf.svg"        },
-  { id: "restrain",    label: "Entangled — movement restricted",                  fallbackIcon: "icons/svg/net.svg"         },
 ];
 
 const COVER_STAGES = [
@@ -158,9 +157,10 @@ function getLightningReflexesIndicator(actor) {
     })
     .find(Boolean);
 
-  const tooltip = detail
+  const baseTooltip = detail
     ? `${lrItem.name}: ${detail}`
     : `${lrItem.name}${lrItem.type ? ` (${lrItem.type})` : ""}`;
+  const tooltip = `Lightning Reflexes — ${baseTooltip}`;
 
   return {
     shortLabel: "LR",
@@ -535,10 +535,27 @@ function createCombatChatMessage(content, phase, segment, extraData = {}) {
   });
 }
 
+function createGmOnlyCombatChatMessage(content, phase, segment, extraData = {}) {
+  const whisper = ChatMessage.getWhisperRecipients("GM").map(user => user.id);
+  return createCombatChatMessage(content, phase, segment, {
+    ...extraData,
+    whisper
+  });
+}
+
 function isDisabledControl(element) {
   return element?.classList?.contains("disabled")
     || element?.classList?.contains("read-only")
     || element?.getAttribute?.("aria-disabled") === "true";
+}
+
+function canUserControlToken(token) {
+  if (!token) return false;
+  if (game.user.isGM) return true;
+  if (typeof token.document?.canUserModify === "function") {
+    return token.document.canUserModify(game.user, "update");
+  }
+  return Boolean(token.actor?.isOwner);
 }
 
 export class HeroControllerPanel extends Application {
@@ -637,7 +654,7 @@ export class HeroControllerPanel extends Application {
       const allowHold = showHold && canControlToken;
       const showRelease = isHeld;
       const allowRelease = showRelease && canControlToken;
-      const showAbort = canActThisSegment && !hasActed && !isActing;
+      const showAbort = canActThisSegment && !hasActed;
       const allowAbort = showAbort && canControlToken;
       const showEndTurn = isActing;
       const canManageTurnEffects = canControlToken;
@@ -661,10 +678,11 @@ export class HeroControllerPanel extends Application {
       }).filter(Boolean);
 
       const quickStatusIds = new Set(HERO_QUICK_STATUSES.map(s => s.id));
+      const hiddenEffectStatusIds = new Set([...quickStatusIds, "restrain", "entangle"]);
       const effects = (actor.effects ?? [])
         .filter(e => !e.disabled)
-        .filter(e => ![...(e.statuses ?? [])].some(s => quickStatusIds.has(s)))
-        .map(e => ({ icon: e.icon, label: e.name ?? e.label ?? "" }));
+        .filter(e => ![...(e.statuses ?? [])].some(s => hiddenEffectStatusIds.has(s)))
+        .map(e => ({ id: e.id, icon: e.icon, label: e.name ?? e.label ?? "" }));
 
       let stateClass, statusText;
       if (isActing) {
@@ -713,7 +731,9 @@ export class HeroControllerPanel extends Application {
         statBars,
         canSeeStats,
         effects,
-        adjustments: (token.document.getFlag("hero-combat-engine", "adjustments") ?? []).map(a => {
+        adjustments: (token.document.getFlag("hero-combat-engine", "adjustments") ?? [])
+          .filter(a => a.type !== "entangle")
+          .map(a => {
           const fadeInterval = normalizeFadeInterval(a.fadeInterval);
           return {
             ...a,
@@ -724,18 +744,10 @@ export class HeroControllerPanel extends Application {
             tooltip: buildAdjustmentTooltip(a)
           };
         }),
-        isGM: privilegedUser,
-        isActing, isHeld, isAborted,
-        showHold, showRelease, showAbort, showEndTurn,
-        allowEndTurn, allowRemove, allowHold, allowRelease, allowAbort,
-        canManageTurnEffects,
-        canActThisSegment,
-        stateClass,
-        statusText,
-        lightningReflexes,
         quickStatuses: (() => {
           const activeIDs = actor.statuses ?? new Set(actor.effects.flatMap(e => [...(e.statuses ?? [])]));
           const cfgMap = Object.fromEntries((CONFIG.statusEffects ?? []).map(s => [s.id, s.icon]));
+          const hasEntangleBody = (token.document.getFlag("hero-combat-engine", "entangleBody") ?? 0) > 0;
           return HERO_QUICK_STATUSES.map(s => {
             const active = activeIDs.has(s.id);
             const entry = {
@@ -743,7 +755,7 @@ export class HeroControllerPanel extends Application {
               label: s.label,
               icon: cfgMap[s.id] ?? s.fallbackIcon,
               active,
-              showInTracker: s.id !== "prone" || active,
+              showInTracker: s.id === "prone" ? false : true,
               canToggle: isPrivileged() || isOwnedByCurrentUser
             };
             if (active) {
@@ -753,13 +765,40 @@ export class HeroControllerPanel extends Application {
             return entry;
           });
         })(),
+        entangle: (() => {
+          const hasEntangleBody = (token.document.getFlag("hero-combat-engine", "entangleBody") ?? 0) > 0;
+          const activeEntangleIds = getActiveEntangleStatusIds(actor);
+          const cfgMap = Object.fromEntries((CONFIG.statusEffects ?? []).map(s => [s.id, s.icon]));
+          if (!hasEntangleBody && !activeEntangleIds.length) return null;
+          const preferredId = getPreferredEntangleStatusId(actor);
+          const icon = cfgMap[preferredId] ?? cfgMap["restrain"] ?? "icons/svg/net.svg";
+          const body = token.document.getFlag("hero-combat-engine", "entangleBody") ?? 0;
+          return {
+            id: preferredId,
+            icon,
+            body,
+            active: hasEntangleBody || activeEntangleIds.length > 0,
+            canManage: canManageTurnEffects,
+            tooltip: body > 0 
+              ? `Entangle BODY: ${body} remaining — right-click to attack or manage`
+              : `Entangled — right-click to manage`
+          };
+        })(),
+        isGM: privilegedUser,
+        isActing, isHeld, isAborted,
+        showHold, showRelease, showAbort, showEndTurn,
+        allowEndTurn, allowRemove, allowHold, allowRelease, allowAbort,
+        canManageTurnEffects,
+        canActThisSegment,
+        stateClass,
+        statusText,
+        lightningReflexes,
         coverDCV,
         coverStageLabel: coverStage.label,
         ocvBonus,
         ocvStageLabel: ocvStage.label,
         mcvBonus,
         mcvStageLabel: mcvStage.label,
-        entangleBody: token.document.getFlag("hero-combat-engine", "entangleBody") ?? 0,
         canToggleCover: canControlToken,
         canToggleOcvBonus: canControlToken,
         canToggleMcvBonus: canControlToken,
@@ -796,8 +835,10 @@ export class HeroControllerPanel extends Application {
 
     html.find(".token-image").on("contextmenu", async (e) => {
       if (isDisabledControl(e.currentTarget)) return;
-      e.preventDefault();
       const tokenId = e.currentTarget.closest('[data-token-id]').dataset.tokenId;
+      const token = canvas.tokens.get(tokenId);
+      if (!canUserControlToken(token)) return;
+      e.preventDefault();
       if (canDirectlyUpdateScene()) {
         await this._insertTokenAtFront(tokenId);
       } else {
@@ -1000,6 +1041,14 @@ export class HeroControllerPanel extends Application {
       canvas.animatePan({ x: token.center.x, y: token.center.y, scale: Math.max(1, canvas.stage.scale.x), duration: 250 });
     });
 
+    html.find(".hero-acting-label").dblclick((e) => {
+      e.preventDefault();
+      const tokenId = e.currentTarget.dataset.tokenId;
+      const token = canvas.tokens.get(tokenId);
+      if (!token) return;
+      canvas.animatePan({ x: token.center.x, y: token.center.y, scale: Math.max(1, canvas.stage.scale.x), duration: 250 });
+    });
+
     html.find(".hero-remove-combatant").click(async (e) => {
       if (isDisabledControl(e.currentTarget)) return;
       e.preventDefault();
@@ -1074,20 +1123,23 @@ export class HeroControllerPanel extends Application {
       }
     });
 
-    html.find(".hero-status-btn.active").on("contextmenu", async (e) => {
+    html.find(".hero-status-btn.active:not(.hero-entangle-btn)").on("contextmenu", async (e) => {
       if (isDisabledControl(e.currentTarget)) return;
-      e.preventDefault();
       const tokenId  = e.currentTarget.dataset.tokenId;
+      const token = canvas.tokens.get(tokenId);
+      if (!canUserControlToken(token)) return;
+      e.preventDefault();
       const statusId = e.currentTarget.dataset.statusId;
       await this._openStatusTrackerDialog(tokenId, statusId);
     });
 
     html.find(".hero-adjustment-badge").on("contextmenu", async (e) => {
       if (isDisabledControl(e.currentTarget)) return;
-      e.preventDefault();
       const tokenId = e.currentTarget.dataset.tokenId;
-      const adjId   = e.currentTarget.dataset.adjId;
-      await this._openAdjustmentDialog(tokenId, adjId);
+      const token = canvas.tokens.get(tokenId);
+      if (!canUserControlToken(token)) return;
+      e.preventDefault();
+      await this._openAddAdjustmentDialog(tokenId);
     });
 
     html.find(".hero-add-adjustment").click(async (e) => {
@@ -1097,12 +1149,63 @@ export class HeroControllerPanel extends Application {
       await this._openAddAdjustmentDialog(tokenId);
     });
 
-    html.find(".hero-entangle-badge").on("contextmenu", async (e) => {
+    html.find(".hero-entangle-btn").on("contextmenu", async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
+      const tokenId = e.currentTarget.dataset.tokenId;
+      const token = canvas.tokens.get(tokenId);
+      if (!canUserControlToken(token)) return;
+      e.preventDefault();
+      await this._openEntangleDialog(tokenId, getPreferredEntangleStatusId(token?.actor));
+    });
+
+    html.find(".hero-entangle-btn").click(async (e) => {
       if (isDisabledControl(e.currentTarget)) return;
       e.preventDefault();
       const tokenId = e.currentTarget.dataset.tokenId;
       const token = canvas.tokens.get(tokenId);
-      await this._openEntangleDialog(tokenId, getPreferredEntangleStatusId(token?.actor));
+      if (!token?.actor) return;
+      if (!isPrivileged() && !token.actor.isOwner) return;
+
+      const isCurrentlyActive = e.currentTarget.classList.contains("active");
+      const statusId = getPreferredEntangleStatusId(token?.actor);
+
+      // If already active, open the management dialog instead of toggling off.
+      if (isCurrentlyActive) {
+        await this._openEntangleDialog(tokenId, statusId);
+        return;
+      }
+
+      // Toggle on: prompt for BODY.
+      const body = await new Promise(resolve => {
+        new Dialog({
+          title: "Entangle BODY",
+          content: `
+            <p>Enter Entangle BODY for <strong>${token.name}</strong>.</p>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+              <label style="flex-shrink:0;">BODY:</label>
+              <input type="number" id="ent-body-input" value="6" min="1" style="width:64px;" autofocus/>
+            </div>
+          `,
+          buttons: {
+            apply: { label: "Apply", callback: html => resolve(parseInt(html.find("#ent-body-input").val()) || 0) },
+            cancel: { label: "Cancel", callback: () => resolve(null) }
+          },
+          default: "apply"
+        }).render(true);
+      });
+      if (!body || body < 1) return;
+      await token.document.setFlag("hero-combat-engine", "entangleBody", body);
+
+      // Apply the entangle status effect.
+      const effectData = CONFIG.statusEffects?.find(e => e.id === statusId);
+      if (effectData) {
+        if (typeof token.actor.toggleStatusEffect === "function") {
+          await token.actor.toggleStatusEffect(statusId);
+        } else {
+          await token.toggleEffect(effectData);
+        }
+      }
+      await this.render(true);
     });
 
     // Use native addEventListener so the contextmenu event reaches us regardless
@@ -1110,6 +1213,8 @@ export class HeroControllerPanel extends Application {
     html.find(".hero-cv-stack").each((_, el) => {
       el.addEventListener("contextmenu", async (e) => {
         if (isDisabledControl(el)) return;
+        const token = canvas.tokens.get(el.dataset.tokenId);
+        if (!canUserControlToken(token)) return;
         e.preventDefault();
         e.stopPropagation();
         await this._openCvAdjustmentDialog(el.dataset.tokenId);
@@ -1198,35 +1303,35 @@ export class HeroControllerPanel extends Application {
 
     html.find(".hero-cover-btn:not(.hero-ocv-btn):not(.hero-mcv-btn)").on("contextmenu", async (e) => {
       if (isDisabledControl(e.currentTarget)) return;
-      e.preventDefault();
       const tokenId = e.currentTarget.dataset.tokenId;
       const token = canvas.tokens.get(tokenId);
       if (!token?.actor) return;
-      if (!isPrivileged() && !token.actor.isOwner) return;
+      if (!canUserControlToken(token)) return;
+      e.preventDefault();
       await this._openCoverDialog(tokenId);
     });
 
     html.find(".hero-ocv-btn").on("contextmenu", async (e) => {
       if (isDisabledControl(e.currentTarget)) return;
-      e.preventDefault();
       const tokenId = e.currentTarget.dataset.tokenId;
       const token = canvas.tokens.get(tokenId);
       if (!token?.actor) return;
-      if (!isPrivileged() && !token.actor.isOwner) return;
+      if (!canUserControlToken(token)) return;
+      e.preventDefault();
       await this._openOcvBonusDialog(tokenId);
     });
 
     html.find(".hero-mcv-btn").on("contextmenu", async (e) => {
       if (isDisabledControl(e.currentTarget)) return;
-      e.preventDefault();
       const tokenId = e.currentTarget.dataset.tokenId;
       const token = canvas.tokens.get(tokenId);
       if (!token?.actor) return;
-      if (!isPrivileged() && !token.actor.isOwner) return;
+      if (!canUserControlToken(token)) return;
+      e.preventDefault();
       await this._openMcvBonusDialog(tokenId);
     });
 
-    html.find(".hero-status-btn").click(async (e) => {
+    html.find(".hero-status-btn:not(.hero-entangle-btn)").click(async (e) => {
       if (isDisabledControl(e.currentTarget)) return;
       e.preventDefault();
       const tokenId  = e.currentTarget.dataset.tokenId;
@@ -1329,6 +1434,23 @@ export class HeroControllerPanel extends Application {
       } else {
         await token.toggleEffect(effectData);
       }
+      await this.render(true);
+    });
+
+    html.find(".hero-effect-icon").click(async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
+      e.preventDefault();
+      const tokenId = e.currentTarget.dataset.tokenId;
+      const effectId = e.currentTarget.dataset.effectId;
+      const token = canvas.tokens.get(tokenId);
+      if (!token?.actor) return;
+      if (!isPrivileged() && !token.actor.isOwner) return;
+
+      const effect = token.actor.effects.get(effectId);
+      if (!effect) return;
+
+      // Toggle the effect disabled state
+      await effect.update({ disabled: !effect.disabled });
       await this.render(true);
     });
   }
@@ -1620,50 +1742,104 @@ export class HeroControllerPanel extends Application {
 
     const CHARS = ["STR","DEX","CON","INT","EGO","PRE","BODY","STUN","END","REC","SPD","PD","ED","OCV","DCV","OMCV","DMCV"];
     const charOptions = CHARS.map(c => `<option value="${c}">${c}</option>`).join("");
+    const allAdjustments = token.document.getFlag("hero-combat-engine", "adjustments") ?? [];
+    const adjustments = allAdjustments.filter(a => a.type === "drain" || a.type === "aid");
+
+    // Build HTML for existing Drain/Aid adjustments with inline update/remove controls.
+    let existingAdjustmentsHtml = "";
+    if (adjustments.length > 0) {
+      existingAdjustmentsHtml = `
+        <div style="margin-bottom:16px;padding:8px;background:rgba(0,0,0,0.1);border-radius:4px;">
+          <p style="margin:0 0 8px 0;font-weight:bold;font-size:0.9em;">Current Drain / Aid:</p>
+          ${adjustments.map(a => {
+            const typeLabel = a.type === "drain" ? "Drain" : "Aid";
+            const adjFadeInterval = normalizeFadeInterval(a.fadeInterval);
+            const fadeUnitLabel = (adjFadeInterval === "segment" ? "Segment" : "Phase");
+            return `
+              <div data-adj-id="${a.id}" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px;background:rgba(255,255,255,0.05);border-radius:3px;margin-bottom:6px;">
+                <div style="min-width:0;">
+                  <div style="font-size:0.85em;overflow-wrap:anywhere;">
+                    <strong>${typeLabel} ${a.char}</strong>: ${a.points} pts
+                    ${a.powerName ? ` (${a.powerName}${a.powerLevel ? " L" + a.powerLevel : ""})` : ""}
+                  </div>
+                  <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;">
+                    <label style="font-size:0.8em;">Points:</label>
+                    <input type="number" id="adj-existing-points-${a.id}" value="${a.points}" min="0" style="width:64px;"/>
+                    <label style="font-size:0.8em;">Fade:</label>
+                    <input type="number" id="adj-existing-fade-${a.id}" value="${a.fadeRate}" min="1" style="width:64px;"/>
+                    <select id="adj-existing-interval-${a.id}" style="width:104px;">
+                      <option value="phase"${adjFadeInterval === "phase" ? " selected" : ""}>per Phase</option>
+                      <option value="segment"${adjFadeInterval === "segment" ? " selected" : ""}>per Segment</option>
+                    </select>
+                    <span style="font-size:0.8em;color:var(--color-text-dark-secondary);">(${fadeUnitLabel})</span>
+                  </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <button type="button" class="adj-inline-update" data-adj-id="${a.id}" style="padding:4px 8px;background:#1f7a43;border:none;border-radius:3px;color:white;cursor:pointer;font-size:0.8em;">Update</button>
+                  <button type="button" class="adj-inline-remove" data-adj-id="${a.id}" style="padding:4px 8px;background:#9b2c2c;border:none;border-radius:3px;color:white;cursor:pointer;font-size:0.8em;">Cancel</button>
+                </div>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      `;
+    }
 
     const result = await new Promise(resolve => {
-      new Dialog({
-        title: `Add Drain / Aid — ${token.name}`,
+      let settled = false;
+      const done = value => {
+        if (settled) return;
+        settled = true;
+        resolve(value);
+      };
+
+      const dlg = new Dialog({
+        title: `Manage Drain / Aid — ${token.name}`,
         content: `
           <div style="display:grid;gap:8px;margin-top:4px;">
-            <div style="display:flex;align-items:center;gap:8px;">
-              <label style="min-width:130px;flex-shrink:0;">Type:</label>
-              <select id="adj-type" style="flex:1;">
-                <option value="drain">Drain</option>
-                <option value="aid">Aid</option>
-              </select>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px;">
-              <label style="min-width:130px;flex-shrink:0;">Power Name:</label>
-              <input type="text" id="adj-power-name" placeholder="e.g., Telepathy, Drain STR" style="flex:1;" autofocus/>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px;">
-              <label style="min-width:130px;flex-shrink:0;">Power Level:</label>
-              <input type="number" id="adj-power-level" placeholder="e.g., 10" min="0" style="width:70px;"/>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px;">
-              <label style="min-width:130px;flex-shrink:0;">Characteristic:</label>
-              <select id="adj-char" style="flex:1;">${charOptions}</select>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px;">
-              <label style="min-width:130px;flex-shrink:0;">Points:</label>
-              <input type="number" id="adj-points" value="6" min="1" style="width:70px;"/>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px;">
-              <label style="min-width:130px;flex-shrink:0;">Fade rate:</label>
-              <input type="number" id="adj-fade" value="5" min="1" style="width:70px;"/>
-              <select id="adj-fade-interval" style="width:110px;">
-                <option value="phase" selected>per Phase</option>
-                <option value="segment">per Segment</option>
-              </select>
+            ${existingAdjustmentsHtml}
+            <div style="border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;">
+              <p style="margin:0 0 8px 0;font-weight:bold;font-size:0.9em;">Add New:</p>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <label style="min-width:130px;flex-shrink:0;">Type:</label>
+                <select id="adj-type" style="flex:1;">
+                  <option value="drain">Drain</option>
+                  <option value="aid">Aid</option>
+                </select>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <label style="min-width:130px;flex-shrink:0;">Power Name:</label>
+                <input type="text" id="adj-power-name" placeholder="e.g., Telepathy, Drain STR" style="flex:1;" autofocus/>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <label style="min-width:130px;flex-shrink:0;">Power Level:</label>
+                <input type="number" id="adj-power-level" placeholder="e.g., 10" min="0" style="width:70px;"/>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <label style="min-width:130px;flex-shrink:0;">Characteristic:</label>
+                <select id="adj-char" style="flex:1;">${charOptions}</select>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <label style="min-width:130px;flex-shrink:0;">Points:</label>
+                <input type="number" id="adj-points" value="6" min="1" style="width:70px;"/>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <label style="min-width:130px;flex-shrink:0;">Fade rate:</label>
+                <input type="number" id="adj-fade" value="5" min="1" style="width:70px;"/>
+                <select id="adj-fade-interval" style="width:110px;">
+                  <option value="phase" selected>per Phase</option>
+                  <option value="segment">per Segment</option>
+                </select>
+              </div>
             </div>
           </div>
         `,
         buttons: {
           apply: {
-            icon: '<i class="fas fa-check"></i>',
-            label: "Add",
-            callback: html => resolve({
+            icon: '<i class="fas fa-plus"></i>',
+            label: "Add New",
+            callback: html => done({
+              action: "add",
               type:     html.find("#adj-type").val(),
               powerName: String(html.find("#adj-power-name").val() ?? "").trim(),
               powerLevel: parseInt(html.find("#adj-power-level").val()) || 0,
@@ -1673,13 +1849,97 @@ export class HeroControllerPanel extends Application {
               fadeInterval: normalizeFadeInterval(html.find("#adj-fade-interval").val())
             })
           },
-          cancel: { label: "Cancel", callback: () => resolve(null) }
+          cancel: { label: "Cancel", callback: () => done(null) }
         },
-        default: "apply"
-      }).render(true);
+        default: "apply",
+        render: html => {
+          html.find(".adj-inline-update").click((e) => {
+            e.preventDefault();
+            const adjId = e.currentTarget.dataset.adjId;
+            done({
+              action: "update-existing",
+              adjId,
+              points: parseInt(html.find(`#adj-existing-points-${adjId}`).val()) || 0,
+              fadeRate: parseInt(html.find(`#adj-existing-fade-${adjId}`).val()) || 5,
+              fadeInterval: normalizeFadeInterval(html.find(`#adj-existing-interval-${adjId}`).val())
+            });
+            dlg.close();
+          });
+
+          html.find(".adj-inline-remove").click((e) => {
+            e.preventDefault();
+            const adjId = e.currentTarget.dataset.adjId;
+            done({ action: "remove-existing", adjId });
+            dlg.close();
+          });
+        }
+      }, {
+        close: () => done(null)
+      });
+
+      dlg.render(true);
     });
 
     if (!result) return;
+
+    const phase   = canvas.scene.getFlag("hero-combat-engine", "heroPhase")   ?? 1;
+    const segment = canvas.scene.getFlag("hero-combat-engine", "heroSegment") ?? 1;
+
+    if (result.action === "update-existing" || result.action === "remove-existing") {
+      const target = adjustments.find(a => a.id === result.adjId);
+      if (!target) return;
+
+      const typeLabel = target.type === "drain" ? "Drain" : "Aid";
+      if (result.action === "remove-existing") {
+        if (target.appliedDelta) {
+          const statKey = normalizeAdjustmentCharKey(target.charKey ?? target.char);
+          await token.actor.update(getAdjustmentUpdateData(token.actor, statKey, -Number(target.appliedDelta || 0)));
+        }
+        const nextAll = allAdjustments.filter(a => a.id !== target.id);
+        if (nextAll.length) await token.document.setFlag("hero-combat-engine", "adjustments", nextAll);
+        else await token.document.unsetFlag("hero-combat-engine", "adjustments");
+        createCombatChatMessage(`<strong>${token.name}</strong>: ${typeLabel} ${target.char} removed.`, phase, segment);
+        await this.render(true);
+        return;
+      }
+
+      if (result.points <= 0) {
+        if (target.appliedDelta) {
+          const statKey = normalizeAdjustmentCharKey(target.charKey ?? target.char);
+          await token.actor.update(getAdjustmentUpdateData(token.actor, statKey, -Number(target.appliedDelta || 0)));
+        }
+        const nextAll = allAdjustments.filter(a => a.id !== target.id);
+        if (nextAll.length) await token.document.setFlag("hero-combat-engine", "adjustments", nextAll);
+        else await token.document.unsetFlag("hero-combat-engine", "adjustments");
+        createCombatChatMessage(`<strong>${token.name}</strong>: ${typeLabel} ${target.char} cleared manually.`, phase, segment);
+        await this.render(true);
+        return;
+      }
+
+      const statKey = normalizeAdjustmentCharKey(target.charKey ?? target.char);
+      const baseValue = Number(target.baseValue ?? getAdjustmentBaseCharacteristicValue(token.actor, statKey));
+      const oldApplied = Number(target.appliedDelta ?? 0);
+      const nextApplied = getAdjustmentTargetDelta(baseValue, result.points, target.type);
+      const delta = nextApplied - oldApplied;
+      if (delta !== 0) {
+        await token.actor.update(getAdjustmentUpdateData(token.actor, statKey, delta));
+      }
+
+      const nextAll = allAdjustments.map(a => a.id === target.id ? {
+        ...a,
+        points: result.points,
+        fadeRate: result.fadeRate,
+        fadeInterval: result.fadeInterval,
+        charKey: statKey,
+        baseValue,
+        appliedDelta: nextApplied
+      } : a);
+      await token.document.setFlag("hero-combat-engine", "adjustments", nextAll);
+      const fadeUnitLabel = result.fadeInterval === "segment" ? "Segment" : "Phase";
+      createCombatChatMessage(`<strong>${token.name}</strong>: ${typeLabel} ${target.char} updated — ${result.points} pts remaining (fades ${result.fadeRate}/${fadeUnitLabel}).`, phase, segment);
+      await this.render(true);
+      return;
+    }
 
     const statKey = normalizeAdjustmentCharKey(result.char);
     const baseValue = getAdjustmentBaseCharacteristicValue(token.actor, statKey);
@@ -1689,7 +1949,7 @@ export class HeroControllerPanel extends Application {
       await token.actor.update(getAdjustmentUpdateData(token.actor, statKey, appliedDelta));
     }
 
-    const existing = token.document.getFlag("hero-combat-engine", "adjustments") ?? [];
+    const existing = allAdjustments;
     const newEntry = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       type:     result.type,
@@ -1705,121 +1965,10 @@ export class HeroControllerPanel extends Application {
     };
     await token.document.setFlag("hero-combat-engine", "adjustments", [...existing, newEntry]);
 
-    const phase   = canvas.scene.getFlag("hero-combat-engine", "heroPhase")   ?? 1;
-    const segment = canvas.scene.getFlag("hero-combat-engine", "heroSegment") ?? 1;
     const typeLabel = result.type === "drain" ? "Drain" : "Aid";
     const fadeUnitLabel = result.fadeInterval === "segment" ? "Segment" : "Phase";
     const powerInfo = result.powerName ? ` (${result.powerName}${result.powerLevel ? " L" + result.powerLevel : ""})` : "";
     createCombatChatMessage(`<strong>${token.name}</strong>: ${typeLabel} ${result.char} ${result.points} pts applied${powerInfo} (fades ${result.fadeRate}/${fadeUnitLabel}).`, phase, segment);
-
-    await this.render(true);
-  }
-
-  async _openAdjustmentDialog(tokenId, adjId) {
-    const token = canvas.tokens.get(tokenId);
-    if (!token?.actor) return;
-    if (!isPrivileged() && !token.actor.isOwner) return;
-
-    const adjustments = token.document.getFlag("hero-combat-engine", "adjustments") ?? [];
-    const adj = adjustments.find(a => a.id === adjId);
-    if (!adj) return;
-    const adjFadeInterval = normalizeFadeInterval(adj.fadeInterval);
-    const adjFadeUnitLabel = adjFadeInterval === "segment" ? "Segment" : "Phase";
-
-    const typeLabel = adj.type === "drain" ? "Drain" : "Aid";
-
-    const result = await new Promise(resolve => {
-      new Dialog({
-        title: `${typeLabel} ${adj.char} — ${token.name}`,
-        content: `
-          <div style="display:grid;gap:8px;margin-top:4px;">
-            <p style="margin:0;font-size:0.85em;color:var(--color-text-dark-secondary);">
-              ${typeLabel} on <strong>${adj.char}</strong> — currently <strong>${adj.points} pts</strong> remaining (fades ${adj.fadeRate}/${adjFadeUnitLabel}).
-            </p>
-            <div style="display:flex;align-items:center;gap:8px;">
-              <label style="min-width:130px;flex-shrink:0;">Points remaining:</label>
-              <input type="number" id="adj-points" value="${adj.points}" min="0" style="width:70px;" autofocus/>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px;">
-              <label style="min-width:130px;flex-shrink:0;">Fade rate:</label>
-              <input type="number" id="adj-fade" value="${adj.fadeRate}" min="1" style="width:70px;"/>
-              <select id="adj-fade-interval" style="width:110px;">
-                <option value="phase"${adjFadeInterval === "phase" ? " selected" : ""}>per Phase</option>
-                <option value="segment"${adjFadeInterval === "segment" ? " selected" : ""}>per Segment</option>
-              </select>
-            </div>
-          </div>
-        `,
-        buttons: {
-          update: {
-            icon: '<i class="fas fa-save"></i>',
-            label: "Update",
-            callback: html => resolve({
-              action:   "update",
-              points:   parseInt(html.find("#adj-points").val()) || 0,
-              fadeRate: parseInt(html.find("#adj-fade").val())   || 5,
-              fadeInterval: normalizeFadeInterval(html.find("#adj-fade-interval").val())
-            })
-          },
-          remove: {
-            icon: '<i class="fas fa-times"></i>',
-            label: "Remove",
-            callback: () => resolve({ action: "remove" })
-          },
-          cancel: { label: "Cancel", callback: () => resolve(null) }
-        },
-        default: "update"
-      }).render(true);
-    });
-
-    if (!result) return;
-
-    const phase   = canvas.scene.getFlag("hero-combat-engine", "heroPhase")   ?? 1;
-    const segment = canvas.scene.getFlag("hero-combat-engine", "heroSegment") ?? 1;
-
-    if (result.action === "update") {
-      if (result.points <= 0) {
-        if (adj.appliedDelta) {
-          const statKey = normalizeAdjustmentCharKey(adj.charKey ?? adj.char);
-          await token.actor.update(getAdjustmentUpdateData(token.actor, statKey, -Number(adj.appliedDelta || 0)));
-        }
-        const newAdjs = adjustments.filter(a => a.id !== adjId);
-        if (newAdjs.length) await token.document.setFlag("hero-combat-engine", "adjustments", newAdjs);
-        else await token.document.unsetFlag("hero-combat-engine", "adjustments");
-        createCombatChatMessage(`<strong>${token.name}</strong>: ${typeLabel} ${adj.char} cleared manually.`, phase, segment);
-      } else {
-        const statKey = normalizeAdjustmentCharKey(adj.charKey ?? adj.char);
-        const baseValue = Number(adj.baseValue ?? getAdjustmentBaseCharacteristicValue(token.actor, statKey));
-        const oldApplied = Number(adj.appliedDelta ?? 0);
-        const nextApplied = getAdjustmentTargetDelta(baseValue, result.points, adj.type);
-        const delta = nextApplied - oldApplied;
-        if (delta !== 0) {
-          await token.actor.update(getAdjustmentUpdateData(token.actor, statKey, delta));
-        }
-
-        const newAdjs = adjustments.map(a => a.id === adjId ? {
-          ...a,
-          points: result.points,
-          fadeRate: result.fadeRate,
-          fadeInterval: result.fadeInterval,
-          charKey: statKey,
-          baseValue,
-          appliedDelta: nextApplied
-        } : a);
-        await token.document.setFlag("hero-combat-engine", "adjustments", newAdjs);
-        const fadeUnitLabel = result.fadeInterval === "segment" ? "Segment" : "Phase";
-        createCombatChatMessage(`<strong>${token.name}</strong>: ${typeLabel} ${adj.char} updated — ${result.points} pts remaining (fades ${result.fadeRate}/${fadeUnitLabel}).`, phase, segment);
-      }
-    } else if (result.action === "remove") {
-      if (adj.appliedDelta) {
-        const statKey = normalizeAdjustmentCharKey(adj.charKey ?? adj.char);
-        await token.actor.update(getAdjustmentUpdateData(token.actor, statKey, -Number(adj.appliedDelta || 0)));
-      }
-      const newAdjs = adjustments.filter(a => a.id !== adjId);
-      if (newAdjs.length) await token.document.setFlag("hero-combat-engine", "adjustments", newAdjs);
-      else await token.document.unsetFlag("hero-combat-engine", "adjustments");
-      createCombatChatMessage(`<strong>${token.name}</strong>: ${typeLabel} ${adj.char} removed.`, phase, segment);
-    }
 
     await this.render(true);
   }
@@ -1990,166 +2139,75 @@ export class HeroControllerPanel extends Application {
     const toHitRoll = await (new Roll("3d6")).evaluate({ async: true });
     const hit = toHitRoll.total <= targetNumber;
 
-    createCombatChatMessage(
-      `<strong>${token.name}</strong> attacks Entangle with <strong>${chosen.label}</strong>: rolled <strong>${toHitRoll.total}</strong> vs target <strong>${targetNumber}</strong> (${hit ? "HIT" : "MISS"}).`,
-      phase,
-      segment,
-      { roll: toHitRoll }
-    );
-
-    if (!hit) return;
-
-    let suggestedDamage = "";
-    let suggestedDefense = "0";
-    let lastDamageRoll = null;
-
-    while (true) {
-      const damageResult = await new Promise(resolve => {
-        new Dialog({
-          title: `Apply Entangle Damage — ${token.name}`,
-          content: `
-            <div style="display:grid;gap:8px;margin-top:4px;">
-              <p style="margin:0;font-size:0.85em;color:var(--color-text-dark-secondary);">
-                Enter BODY dealt to Entangle. Remaining BODY: <strong>${currentBody}</strong>.
-              </p>
-              <div style="display:flex;align-items:center;gap:8px;">
-                <label style="min-width:130px;flex-shrink:0;">BODY damage:</label>
-                <input type="number" id="ent-dmg" value="${suggestedDamage || "0"}" min="0" style="width:80px;" autofocus/>
-              </div>
-              <div style="display:flex;align-items:center;gap:8px;">
-                <label style="min-width:130px;flex-shrink:0;">Defense applied:</label>
-                <input type="number" id="ent-defense" value="${suggestedDefense}" min="0" style="width:80px;"/>
-              </div>
-              <p style="margin:0;font-size:0.8em;color:var(--color-text-dark-secondary);">Attack formula: ${chosen.damageFormula ? `<code>${chosen.damageFormula}</code>` : "none on selected attack"}${lastDamageRoll ? ` (last roll total ${lastDamageRoll.total})` : ""}</p>
-            </div>
-          `,
-          buttons: {
-            apply: {
-              icon: '<i class="fas fa-check"></i>',
-              label: "Apply Damage",
-              callback: html => resolve({
-                action: "apply",
-                bodyDamage: parseInt(html.find("#ent-dmg").val()) || 0,
-                defenseApplied: parseInt(html.find("#ent-defense").val()) || 0
-              })
-            },
-            rollDamage: {
-              icon: '<i class="fas fa-dice"></i>',
-              label: "Roll Damage",
-              callback: html => resolve({
-                action: "rollDamage",
-                defenseApplied: parseInt(html.find("#ent-defense").val()) || 0
-              })
-            },
-            cancel: { label: "Cancel", callback: () => resolve(null) }
-          },
-          default: "apply"
-        }).render(true);
-      });
-
-      if (!damageResult) return;
-
-      suggestedDefense = String(Math.max(0, asNumber(damageResult.defenseApplied, 0)));
-
-      if (damageResult.action === "rollDamage") {
-        try {
-          let formula = chosen.damageFormula;
-          if (!formula) {
-            const customFormula = await new Promise(resolve => {
-              new Dialog({
-                title: `Roll Damage Formula — ${token.name}`,
-                content: `
-                  <div style="display:flex;align-items:center;gap:8px;">
-                    <label style="min-width:120px;flex-shrink:0;">Damage formula:</label>
-                    <input type="text" id="ent-dmg-formula" value="${suggestedDamage && /^\d+$/.test(suggestedDamage) ? `${suggestedDamage}` : "3d6"}" style="width:120px;" autofocus/>
-                  </div>
-                `,
-                buttons: {
-                  roll: { label: "Roll", callback: html => resolve(String(html.find("#ent-dmg-formula").val() ?? "").trim()) },
-                  cancel: { label: "Cancel", callback: () => resolve(null) }
-                },
-                default: "roll"
-              }).render(true);
-            });
-            if (!customFormula) continue;
-            formula = customFormula;
-          }
-
-          lastDamageRoll = await (new Roll(formula)).evaluate({ async: true });
-          suggestedDamage = String(lastDamageRoll.total ?? 0);
-          createCombatChatMessage(
-            `<strong>${token.name}</strong> damage roll for Entangle attack (${chosen.label}). Apply defense, then confirm net BODY in the dialog.`,
-            phase,
-            segment,
-            { roll: lastDamageRoll }
-          );
-        } catch (err) {
-          ui.notifications.error(`Invalid damage formula. Enter BODY manually or try another formula.`);
-          console.error("[HERO ERROR] Entangle damage roll failed:", err);
-        }
-        continue;
-      }
-
-      if (damageResult.action !== "apply") return;
-
-      const bodyDamage = Math.max(0, asNumber(damageResult.bodyDamage, 0));
-      const defenseApplied = Math.max(0, asNumber(damageResult.defenseApplied, 0));
-      const netBodyDamage = Math.max(0, bodyDamage - defenseApplied);
-      const remaining = Math.max(0, currentBody - netBodyDamage);
-
-      if (remaining <= 0) {
-        await token.document.unsetFlag("hero-combat-engine", "entangleBody");
-        for (const clearId of clearStatusIds) {
-          const effectData = CONFIG.statusEffects?.find(e => e.id === clearId);
-          if (!effectData) continue;
-          const isEntangled = actor.statuses?.has(clearId) ?? actor.effects.some(e => [...(e.statuses ?? [])].includes(clearId));
-          if (!isEntangled) continue;
-          if (typeof actor.toggleStatusEffect === "function") await actor.toggleStatusEffect(clearId);
-          else await token.toggleEffect(effectData);
-        }
-          createCombatChatMessage(`<strong>${token.name}</strong> takes ${netBodyDamage} BODY to Entangle after ${defenseApplied} defense (${bodyDamage} rolled) and breaks free.`, phase, segment);
-      } else {
-        await token.document.setFlag("hero-combat-engine", "entangleBody", remaining);
-          createCombatChatMessage(`<strong>${token.name}</strong> takes ${netBodyDamage} BODY to Entangle after ${defenseApplied} defense (${bodyDamage} rolled). ${remaining} BODY remaining.`, phase, segment);
-      }
-      break;
+    if (!hit) {
+      createCombatChatMessage(
+        `<strong>${token.name}</strong> attacks Entangle with <strong>${chosen.label}</strong>: rolled <strong>${toHitRoll.total}</strong> vs target <strong>${targetNumber}</strong> — <strong>MISS</strong>.`,
+        phase, segment, { roll: toHitRoll }
+      );
+      return;
     }
+
+    const hitContent = `<strong>${token.name}</strong> attacks Entangle with <strong>${chosen.label}</strong>: rolled <strong>${toHitRoll.total}</strong> vs target <strong>${targetNumber}</strong> — <strong>HIT!</strong>
+      <div style="margin-top:8px;text-align:center;">
+        <button class="hero-entangle-roll-damage" type="button" style="margin:4px;">
+          <i class="fas fa-dice"></i> Roll Damage
+        </button>
+      </div>`;
+
+    const chatMsg = await createCombatChatMessage(hitContent, phase, segment, { roll: toHitRoll });
+    await chatMsg.setFlag("hero-combat-engine", "entangleAttack", {
+      tokenId,
+      statusId,
+      currentBody,
+      clearStatusIds,
+      damageFormula: chosen.damageFormula || "",
+      attackLabel: chosen.label
+    });
   }
 
   async _openCvAdjustmentDialog(tokenId) {
     const token = canvas.tokens.get(tokenId);
     const actor = token?.actor;
     if (!token || !actor) return;
-    if (!isPrivileged() && !actor.isOwner) return;
+    if (!canUserControlToken(token)) return;
 
     const configuredStats = getCombatValueCharacteristics();
     const activeMods = token.document.getFlag("hero-combat-engine", "cvSegmentMods") ?? [];
     const currentPhase = canvas.scene.getFlag("hero-combat-engine", "heroPhase") ?? 1;
     const currentSegment = canvas.scene.getFlag("hero-combat-engine", "heroSegment") ?? 1;
 
-    // Build per-modifier rows with Edit / Remove buttons
+    // Build per-modifier rows with explicit duration and cancel controls.
     const activeModRows = activeMods.map((m, idx) => {
       const parts = formatCombatValueModParts(getCombatValueModsFromEntry(m), configuredStats);
       const remainingSegments = getCvModifierRemainingSegments(m, currentPhase, currentSegment);
       const appliedPhase = Number(m.appliedPhase);
       const appliedSegment = Number(m.appliedSegment);
-      const timingSuffix = Number.isFinite(appliedPhase) && Number.isFinite(appliedSegment)
-        ? `, applied ${appliedPhase}.${appliedSegment}`
-        : "";
-      const summary = `${parts.join(", ")} (${remainingSegments} seg${remainingSegments === 1 ? "" : "s"} left${timingSuffix})`;
-      return `<div style="display:flex;align-items:center;gap:6px;padding:2px 0;">
-        <span style="flex:1;">${summary}</span>
-        <button type="button" class="cv-mod-edit" data-mod-index="${idx}" title="Edit this modifier" style="flex-shrink:0;width:24px;height:24px;padding:0;line-height:24px;text-align:center;"><i class="fas fa-pen-to-square"></i></button>
-        <button type="button" class="cv-mod-remove" data-mod-index="${idx}" title="Remove this modifier" style="flex-shrink:0;width:24px;height:24px;padding:0;line-height:24px;text-align:center;"><i class="fas fa-trash"></i></button>
+      const appliedLabel = Number.isFinite(appliedPhase) && Number.isFinite(appliedSegment)
+        ? `${appliedPhase}.${appliedSegment}`
+        : "-";
+      return `<div style="display:grid;grid-template-columns:minmax(0,1fr) 110px 88px 64px;gap:8px;align-items:center;padding:4px 0;border-top:1px solid var(--color-border-light-tertiary);">
+        <span style="min-width:0;overflow-wrap:anywhere;">${parts.join(", ")}</span>
+        <span>${remainingSegments} seg${remainingSegments === 1 ? "" : "s"} left</span>
+        <span style="color:var(--color-text-dark-secondary);font-size:0.85em;">Applied ${appliedLabel}</span>
+        <span style="display:flex;justify-content:flex-end;gap:4px;">
+          <button type="button" class="cv-mod-edit" data-mod-index="${idx}" title="Edit this modifier" style="flex-shrink:0;width:24px;height:24px;padding:0;line-height:24px;text-align:center;"><i class="fas fa-pen-to-square"></i></button>
+          <button type="button" class="cv-mod-remove" data-mod-index="${idx}" title="Cancel this modifier" style="flex-shrink:0;padding:1px 8px;line-height:20px;text-align:center;">Cancel</button>
+        </span>
       </div>`;
     }).join("");
 
     const activeSection = activeMods.length
       ? `<div style="font-size:0.8em;padding:4px 6px;border:1px solid var(--color-border-light-secondary);border-radius:4px;">
-          <strong>Active modifiers:</strong>
+          <strong>Active modifiers</strong>
+          <div style="display:grid;grid-template-columns:minmax(0,1fr) 110px 88px 64px;gap:8px;align-items:center;margin-top:6px;padding-bottom:4px;font-weight:600;border-bottom:1px solid var(--color-border-light-secondary);">
+            <span>Modifier</span>
+            <span>Duration Left</span>
+            <span>Applied</span>
+            <span style="text-align:right;">Action</span>
+          </div>
           ${activeModRows}
           <div style="margin-top:4px;border-top:1px solid var(--color-border-light-secondary);padding-top:4px;">
-            <button type="button" class="cv-mod-clear-all" title="Remove all active modifiers" style="width:auto;padding:1px 8px;font-size:0.8em;"><i class="fas fa-trash-can"></i> Clear All</button>
+            <button type="button" class="cv-mod-clear-all" title="Cancel all active modifiers" style="width:auto;padding:1px 8px;font-size:0.8em;"><i class="fas fa-trash-can"></i> Cancel All</button>
           </div>
         </div>`
       : `<div style="font-size:0.8em;padding:4px 6px;border:1px solid var(--color-border-light-secondary);border-radius:4px;">
@@ -2243,7 +2301,7 @@ export class HeroControllerPanel extends Application {
       if (Object.keys(updates).length) await actor.update(updates);
       await token.document.unsetFlag("hero-combat-engine", "cvSegmentMods");
 
-      createCombatChatMessage(`<strong>${token.name}</strong> combat value modifiers cleared.`, phase, segment);
+      createGmOnlyCombatChatMessage(`<strong>${token.name}</strong> combat value modifiers cleared.`, phase, segment);
 
       await this.render(true);
       return;
@@ -2270,7 +2328,7 @@ export class HeroControllerPanel extends Application {
       }
 
       const parts = formatCombatValueModParts(modDeltas, configuredStats);
-      createCombatChatMessage(`<strong>${token.name}</strong> modifier removed: ${parts.join(", ")}.`, phase, segment);
+      createGmOnlyCombatChatMessage(`<strong>${token.name}</strong> modifier removed: ${parts.join(", ")}.`, phase, segment);
 
       await this.render(true);
       return;
@@ -2348,11 +2406,7 @@ export class HeroControllerPanel extends Application {
       for (const [statKey, delta] of Object.entries(editResult.statMods)) {
         Object.assign(applyUpdates, getCharacteristicUpdateData(actor, statKey, delta));
       }
-      const merged = { ...revertUpdates };
-      for (const [path, val] of Object.entries(applyUpdates)) {
-        merged[path] = (merged[path] ?? 0) + val - (revertUpdates[path] ?? 0);
-        // Re-derive: just use actor's current value adjusted by net delta
-      }
+
       // Simpler: revert old, then apply new in sequence
       if (Object.keys(revertUpdates).length) await actor.update(revertUpdates);
       if (Object.keys(applyUpdates).length) await actor.update(applyUpdates);
@@ -2363,7 +2417,7 @@ export class HeroControllerPanel extends Application {
       await token.document.setFlag("hero-combat-engine", "cvSegmentMods", updated);
 
       const parts = formatCombatValueModParts(editResult.statMods, configuredStats);
-      createCombatChatMessage(`<strong>${token.name}</strong> modifier updated: ${parts.join(", ")} for ${editResult.segments} segment${editResult.segments === 1 ? "" : "s"}.`, phase, segment);
+      createGmOnlyCombatChatMessage(`<strong>${token.name}</strong> modifier updated: ${parts.join(", ")} for ${editResult.segments} segment${editResult.segments === 1 ? "" : "s"}.`, phase, segment);
 
       await this.render(true);
       return;
@@ -2388,7 +2442,7 @@ export class HeroControllerPanel extends Application {
 
     const parts = formatCombatValueModParts(result.statMods, configuredStats);
 
-    createCombatChatMessage(`<strong>${token.name}</strong> temporary combat value mod applied: ${parts.join(", ")} for ${segments} segment${segments === 1 ? "" : "s"}.`, phase, segment);
+    createGmOnlyCombatChatMessage(`<strong>${token.name}</strong> temporary combat value mod applied: ${parts.join(", ")} for ${segments} segment${segments === 1 ? "" : "s"}.`, phase, segment);
 
     await this.render(true);
   }
@@ -2478,6 +2532,16 @@ export class HeroControllerPanel extends Application {
     if (aborted.includes(tokenId)) {
       await canvas.scene.setFlag("hero-combat-engine", "hero-combat.abortedTokens", aborted.filter(id => id !== tokenId));
     }
+    const abortReturnMap = canvas.scene.getFlag("hero-combat-engine", "hero-combat.abortReturnMap") ?? {};
+    if (abortReturnMap[tokenId] || Object.values(abortReturnMap).some(v => v?.previousTokenId === tokenId)) {
+      const nextAbortReturnMap = {};
+      for (const [abortingTokenId, data] of Object.entries(abortReturnMap)) {
+        if (abortingTokenId === tokenId) continue;
+        if (data?.previousTokenId === tokenId) continue;
+        nextAbortReturnMap[abortingTokenId] = data;
+      }
+      await canvas.scene.setFlag("hero-combat-engine", "hero-combat.abortReturnMap", nextAbortReturnMap);
+    }
   }
 
   async _toggleHeld(tokenId) {
@@ -2493,9 +2557,51 @@ export class HeroControllerPanel extends Application {
 
   async _toggleAbort(tokenId) {
     if (!canvas?.scene) return;
+    const segment = canvas.scene.getFlag("hero-combat-engine", "heroSegment") ?? 1;
+    const phase = canvas.scene.getFlag("hero-combat-engine", "heroPhase") ?? 1;
+    const actingTokens = getActingTokens(segment);
+    if (!actingTokens.length) return;
+
+    const targetIndex = actingTokens.findIndex(t => t.id === tokenId);
+    if (targetIndex < 0) return;
+
+    const currentActingIndex = canvas.scene.getFlag("hero-combat-engine", "heroCurrentActingIndex") ?? 0;
+    const currentTokenId = actingTokens[currentActingIndex]?.id ?? null;
+
+    if (targetIndex < currentActingIndex) return;
+
     const aborted = canvas.scene.getFlag("hero-combat-engine", "hero-combat.abortedTokens") ?? [];
-    const newAborted = aborted.includes(tokenId) ? aborted.filter(id => id !== tokenId) : [...aborted, tokenId];
-    await canvas.scene.setFlag("hero-combat-engine", "hero-combat.abortedTokens", newAborted);
+    const abortReturnMap = canvas.scene.getFlag("hero-combat-engine", "hero-combat.abortReturnMap") ?? {};
+
+    if (!aborted.includes(tokenId)) {
+      const newAborted = [...aborted, tokenId];
+      await canvas.scene.setFlag("hero-combat-engine", "hero-combat.abortedTokens", newAborted);
+
+      const nextReturnMap = { ...abortReturnMap };
+      nextReturnMap[tokenId] = {
+        previousTokenId: currentTokenId,
+        phase,
+        segment
+      };
+      await canvas.scene.setFlag("hero-combat-engine", "hero-combat.abortReturnMap", nextReturnMap);
+
+      await canvas.scene.setFlag("hero-combat-engine", "heroCurrentActingIndex", targetIndex);
+      return;
+    }
+
+    await canvas.scene.setFlag("hero-combat-engine", "hero-combat.abortedTokens", aborted.filter(id => id !== tokenId));
+    const abortState = abortReturnMap[tokenId] ?? null;
+    const nextReturnMap = { ...abortReturnMap };
+    delete nextReturnMap[tokenId];
+    await canvas.scene.setFlag("hero-combat-engine", "hero-combat.abortReturnMap", nextReturnMap);
+
+    const latestActingTokens = getActingTokens(segment);
+    if (abortState?.previousTokenId) {
+      const restoreIndex = latestActingTokens.findIndex(t => t.id === abortState.previousTokenId);
+      if (restoreIndex >= 0) {
+        await canvas.scene.setFlag("hero-combat-engine", "heroCurrentActingIndex", restoreIndex);
+      }
+    }
   }
 
   async _insertTokenAtFront(tokenId) {
@@ -2530,4 +2636,126 @@ export class HeroControllerPanel extends Application {
     // Refresh the tracker UI to show the new order
     await this.render(true);
   }
+}
+
+// ── Entangle Attack chat-button handler ─────────────────────────
+export function registerEntangleAttackChatHandlers() {
+  Hooks.on("renderChatMessage", (message, html) => {
+    const button = html[0]?.querySelector?.(".hero-entangle-roll-damage");
+    if (!button) return;
+
+    const payload = message.getFlag("hero-combat-engine", "entangleAttack");
+    if (!payload) { button.disabled = true; return; }
+
+    if (payload.applied) {
+      button.disabled = true;
+      button.textContent = "Damage Applied";
+      return;
+    }
+
+    if (!game.user.isGM && !canvas.tokens.get(payload.tokenId)?.actor?.isOwner) {
+      button.disabled = true;
+      button.title = "Owner or GM can roll damage.";
+      return;
+    }
+
+    button.addEventListener("click", async (ev) => {
+      ev.preventDefault();
+      button.disabled = true;
+
+      const { tokenId, statusId, clearStatusIds, damageFormula, attackLabel } = payload;
+      const token = canvas.tokens.get(tokenId);
+      const actor = token?.actor;
+      if (!token || !actor) {
+        ui.notifications.warn("Token not found.");
+        return;
+      }
+
+      const phase   = canvas.scene.getFlag("hero-combat-engine", "heroPhase")   ?? 1;
+      const segment = canvas.scene.getFlag("hero-combat-engine", "heroSegment") ?? 1;
+
+      // Resolve damage formula
+      let formula = damageFormula;
+      if (!formula) {
+        formula = await new Promise(resolve => {
+          new Dialog({
+            title: `Damage Formula — ${token.name}`,
+            content: `<div style="display:flex;align-items:center;gap:8px;">
+              <label style="min-width:120px;flex-shrink:0;">Damage formula:</label>
+              <input type="text" id="ent-dmg-formula" value="3d6" style="width:120px;" autofocus/>
+            </div>`,
+            buttons: {
+              roll: { label: "Roll", callback: h => resolve(String(h.find("#ent-dmg-formula").val() ?? "").trim()) },
+              cancel: { label: "Cancel", callback: () => resolve(null) }
+            },
+            default: "roll"
+          }).render(true);
+        });
+        if (!formula) { button.disabled = false; return; }
+      }
+
+      let damageRoll;
+      try {
+        damageRoll = await (new Roll(formula)).evaluate({ async: true });
+      } catch (err) {
+        ui.notifications.error("Invalid damage formula.");
+        console.error("[HERO ERROR] Entangle damage roll failed:", err);
+        button.disabled = false;
+        return;
+      }
+
+      const bodyDamage = damageRoll.total ?? 0;
+
+      createCombatChatMessage(
+        `<strong>${token.name}</strong> rolls <strong>${bodyDamage}</strong> BODY damage to Entangle (${attackLabel}).`,
+        phase, segment, { roll: damageRoll }
+      );
+
+      // Prompt for defense
+      const defenseResult = await new Promise(resolve => {
+        new Dialog({
+          title: `Apply Entangle Damage — ${token.name}`,
+          content: `<div style="display:grid;gap:8px;margin-top:4px;">
+            <p style="margin:0;font-size:0.85em;">BODY rolled: <strong>${bodyDamage}</strong>. Entangle BODY remaining: <strong>${asNumber(token.document.getFlag("hero-combat-engine", "entangleBody"), 0)}</strong>.</p>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <label style="min-width:130px;flex-shrink:0;">Defense applied:</label>
+              <input type="number" id="ent-defense" value="0" min="0" style="width:80px;" autofocus/>
+            </div>
+          </div>`,
+          buttons: {
+            apply: { icon: '<i class="fas fa-check"></i>', label: "Apply", callback: h => resolve(parseInt(h.find("#ent-defense").val()) || 0) },
+            cancel: { label: "Cancel", callback: () => resolve(null) }
+          },
+          default: "apply"
+        }).render(true);
+      });
+
+      if (defenseResult === null) { button.disabled = false; return; }
+
+      const defenseApplied = Math.max(0, defenseResult);
+      const netBodyDamage  = Math.max(0, bodyDamage - defenseApplied);
+      const latestBody     = asNumber(token.document.getFlag("hero-combat-engine", "entangleBody"), 0);
+      const remaining      = Math.max(0, latestBody - netBodyDamage);
+
+      if (remaining <= 0) {
+        await token.document.unsetFlag("hero-combat-engine", "entangleBody");
+        for (const clearId of clearStatusIds) {
+          const effectData = CONFIG.statusEffects?.find(e => e.id === clearId);
+          if (!effectData) continue;
+          const isEntangled = actor.statuses?.has(clearId) ?? actor.effects.some(e => [...(e.statuses ?? [])].includes(clearId));
+          if (!isEntangled) continue;
+          if (typeof actor.toggleStatusEffect === "function") await actor.toggleStatusEffect(clearId);
+          else await token.toggleEffect(effectData);
+        }
+        createCombatChatMessage(`<strong>${token.name}</strong> takes ${netBodyDamage} BODY to Entangle after ${defenseApplied} defense (${bodyDamage} rolled) and breaks free.`, phase, segment);
+      } else {
+        await token.document.setFlag("hero-combat-engine", "entangleBody", remaining);
+        createCombatChatMessage(`<strong>${token.name}</strong> takes ${netBodyDamage} BODY to Entangle after ${defenseApplied} defense (${bodyDamage} rolled). ${remaining} BODY remaining.`, phase, segment);
+      }
+
+      await message.setFlag("hero-combat-engine", "entangleAttack.applied", true);
+      button.textContent = "Damage Applied";
+      game.heroCombat?.panel?.render(true);
+    });
+  });
 }

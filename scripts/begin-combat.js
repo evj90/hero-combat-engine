@@ -58,6 +58,7 @@ export async function beginCombat(tokenIds = null) {
   // Clear any leftover state from a previous combat.
   await canvas.scene.setFlag("hero-combat-engine", "hero-combat.heldTokens", []);
   await canvas.scene.setFlag("hero-combat-engine", "hero-combat.abortedTokens", []);
+  await canvas.scene.setFlag("hero-combat-engine", "hero-combat.abortReturnMap", {});
   await canvas.scene.unsetFlag("hero-combat-engine", "hero-combat.segmentOverride");
   heroLog("Acting order set:", actingOrder);
 

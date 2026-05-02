@@ -235,7 +235,7 @@ The generated file is `scripts/macro-registry.generated.js` and should be commit
 
 ### Versioning
 Follow semantic versioning:
-- **Major.Minor.Patch** (e.g., 1.1.0)
+- **Major.Minor.Patch** (e.g., 1.2.0)
 - Increment patch for bug fixes
 - Increment minor for new features
 - Increment major for breaking changes

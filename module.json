@@ -3,7 +3,7 @@
   "name": "hero-combat-engine",
   "title": "HERO Combat Engine",
   "description": "A custom HERO System combat engine with segment/phase timing, highlighting, and a floating control panel.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "type": "module",
 
   "compatibility": {
@@ -52,6 +52,6 @@
     "type": "git",
     "url": "https://github.com/evj90/hero-combat-engine.git"
   },
-  "manifest": "https://raw.githubusercontent.com/evj90/hero-combat-engine/main/module.json",
-  "download": "https://github.com/evj90/hero-combat-engine/archive/refs/heads/main.zip"
+  "manifest": "https://raw.githubusercontent.com/evj90/hero-combat-engine/develop/module.json",
+  "download": "https://github.com/evj90/hero-combat-engine/archive/refs/heads/develop.zip"
 }

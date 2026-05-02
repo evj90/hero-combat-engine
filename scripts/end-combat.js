@@ -156,6 +156,7 @@ export async function endCombat() {
   await canvas.scene.unsetFlag("hero-combat-engine", "hero-combat.actingOrder");
   await canvas.scene.unsetFlag("hero-combat-engine", "hero-combat.heldTokens");
   await canvas.scene.unsetFlag("hero-combat-engine", "hero-combat.abortedTokens");
+  await canvas.scene.unsetFlag("hero-combat-engine", "hero-combat.abortReturnMap");
   await canvas.scene.unsetFlag("hero-combat-engine", "hero-combat.segmentOverride");
 
   ChatMessage.create({

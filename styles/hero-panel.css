@@ -581,6 +581,21 @@
   pointer-events: none;
 }
 
+/* Entangle BODY counter badge */
+.hero-ent-badge {
+  position: absolute;
+  bottom: -3px;
+  right: -3px;
+  font-size: 0.6em;
+  font-weight: 700;
+  line-height: 1;
+  background: #8040c0;
+  color: #fff;
+  border-radius: 3px;
+  padding: 0 2px;
+  pointer-events: none;
+}
+
 
 .hero-status-btn:hover:not(.read-only) {
   opacity: 1;

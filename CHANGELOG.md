@@ -1,6 +1,6 @@
 # HERO Combat Engine — Changelog
 
-## v1.1.0
+## v1.2.0
 
 ### Features
 - HERO System 12-segment combat timing engine with phase tracking

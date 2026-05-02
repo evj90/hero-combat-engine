@@ -11,7 +11,7 @@
       {{/if}}
       <div class="flex1 hero-segment-header">
         <h3 class="encounter-title">Segment {{phase}}.{{segment}}</h3>
-        {{#if currentActingTokenName}}<span class="hero-acting-label" title="Acting: {{currentActingTokenName}}">{{currentActingTokenName}}</span>{{/if}}
+        {{#if currentActingTokenName}}<span class="hero-acting-label" data-token-id="{{currentActingTokenId}}" title="Acting: {{currentActingTokenName}} (double-click to pan)">{{currentActingTokenName}}</span>{{/if}}
       </div>
       {{#if canManageCombat}}
       <a class="encounter-control hero-tracker-btn" id="hero-next-token" role="button" title="Next Token" aria-label="Next Token">
@@ -112,7 +112,9 @@
           {{/if}}
           {{/each}}
           {{#each effects}}
-          <img class="hero-effect-icon" src="{{icon}}" title="{{label}}" width="14" height="14"/>
+          <a class="hero-status-btn hero-effect-icon" role="button" data-token-id="{{../id}}" data-effect-id="{{id}}" title="{{label}}" aria-label="{{label}}">
+            <img src="{{icon}}" width="14" height="14"/>
+          </a>
           {{/each}}
           {{#each adjustments}}
               <span class="hero-adjustment-badge hero-adj-{{type}}{{#unless canManage}} read-only{{else}} has-ctx{{/unless}}"
@@ -122,13 +124,12 @@
             {{#if isDrain}}Drain{{else}}Aid{{/if}}:{{char}} {{points}}
           </span>
           {{/each}}
-          {{#if entangleBody}}
-              <span class="hero-adjustment-badge hero-adj-entangle hero-entangle-badge{{#unless canManageTurnEffects}} read-only{{else}} has-ctx{{/unless}}"
-                data-token-id="{{id}}"
-                title="Entangle BODY: {{entangleBody}} remaining{{#if canManageTurnEffects}} — right-click to manage{{else}} — unavailable for current user{{/if}}"
-                aria-disabled="{{#unless canManageTurnEffects}}true{{else}}false{{/unless}}">
-            ENT {{entangleBody}}
-          </span>
+          {{#if entangle}}
+          <a class="hero-status-btn hero-entangle-btn{{#if entangle.active}} active{{/if}}{{#if entangle.canManage}} has-ctx{{else}} read-only{{/if}}"
+             role="button" data-token-id="{{id}}" title="{{entangle.tooltip}}" aria-label="Entangle">
+            <img src="{{entangle.icon}}" width="14" height="14"/>
+            {{#if entangle.body}}<span class="hero-ent-badge">{{entangle.body}}</span>{{/if}}
+          </a>
           {{/if}}
               <a class="hero-add-adjustment hero-tracker-btn{{#unless canManageTurnEffects}} disabled{{/unless}}" role="button" data-token-id="{{id}}" title="Track Drain or Aid{{#unless canManageTurnEffects}} (Unavailable for current user){{/unless}}" aria-label="Track Drain or Aid" aria-disabled="{{#unless canManageTurnEffects}}true{{else}}false{{/unless}}">
             <i class="fas fa-plus-minus"></i>
