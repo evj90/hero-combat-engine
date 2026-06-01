@@ -10,6 +10,13 @@
         </div>
         <p class="hint">Post verbose debug messages to the chat window. Disable for cleaner gameplay.</p>
       </div>
+      <div class="form-group">
+        <label>Entangle Diagnostics</label>
+        <div class="form-fields">
+          <input type="checkbox" name="entangleDebugMode" {{#if entangleDebugMode}}checked{{/if}}/>
+        </div>
+        <p class="hint">When enabled with Debug Mode, logs ambiguous Entangle effect matches (for example label-only third-party effects) to the browser console.</p>
+      </div>
     </fieldset>
 
     <fieldset class="hero-settings-group">

@@ -42,6 +42,7 @@ const INLINE_TEMPLATE = `
 
 const MODULE_ID = "hero-combat-engine";
 const GRAPPLE_FLAG = "grapple";
+const GRAPPLE_OPEN_TRACKER_EVENT = "grapple-open-tracker";
 const GRAPPLE_EFFECT_TYPES = {
   grabbed: "grabbed",
   targetPinned: "targetPinned",
@@ -60,6 +61,118 @@ function canModifyActor(actor) {
   }
   return Boolean(actor.isOwner);
 }
+
+function userOwnsToken(user, token) {
+  if (!user || !token?.actor) return false;
+  if (user.isGM) return true;
+
+  const ownerIds = Object.entries(token.actor.ownership ?? {})
+    .filter(([id, permission]) => id !== "default" && permission >= CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER)
+    .map(([id]) => id);
+
+  return ownerIds.includes(user.id);
+}
+
+function canViewGrappleTracker(user, grappler, target) {
+  return user?.isGM || userOwnsToken(user, grappler) || userOwnsToken(user, target);
+}
+
+async function resolveTokenFromUuidOrId(tokenUuid, tokenId) {
+  const byId = tokenId ? canvas.tokens.get(tokenId) : null;
+  if (byId) return byId;
+  if (!tokenUuid) return null;
+
+  try {
+    const doc = await fromUuid(tokenUuid);
+    const tokenDoc = doc?.documentName === "Token" ? doc : doc?.object?.document;
+    const token = tokenDoc?.object ?? canvas.tokens.get(tokenDoc?.id);
+    return token ?? null;
+  } catch (_err) {
+    return null;
+  }
+}
+
+function getActiveGrappleStatesForToken(token) {
+  const tokenUuid = token?.document?.uuid;
+  if (!tokenUuid) return [];
+
+  const states = [];
+  const seen = new Set();
+
+  for (const effect of token.actor?.effects ?? []) {
+    if (effect?.disabled) continue;
+    const state = getGrappleState(effect);
+    if (!state?.pairKey || seen.has(state.pairKey)) continue;
+
+    const grapplerUuid = state.grapplerTokenUuid ?? null;
+    const targetUuid = state.targetTokenUuid ?? null;
+    if (grapplerUuid !== tokenUuid && targetUuid !== tokenUuid) continue;
+
+    seen.add(state.pairKey);
+    states.push(state);
+  }
+
+  return states;
+}
+
+function emitGrappleTrackerOpen(grappler, target, gSTR, tSTR) {
+  game.socket.emit(`module.${MODULE_ID}`, {
+    type: GRAPPLE_OPEN_TRACKER_EVENT,
+    senderId: game.user.id,
+    grapplerTokenId: grappler.id,
+    grapplerTokenUuid: grappler.document.uuid,
+    targetTokenId: target.id,
+    targetTokenUuid: target.document.uuid,
+    gSTR,
+    tSTR
+  });
+}
+
+async function tryOpenExistingGrappleTracker(grapplerToken) {
+  const states = getActiveGrappleStatesForToken(grapplerToken);
+  for (const state of states) {
+    const grappler = await resolveTokenFromUuidOrId(state.grapplerTokenUuid, null);
+    const target = await resolveTokenFromUuidOrId(state.targetTokenUuid, null);
+    if (!grappler || !target) continue;
+    if (!canViewGrappleTracker(game.user, grappler, target)) continue;
+
+    const gSTR = Number(grappler.actor?.system?.characteristics?.str?.value ?? 0);
+    const tSTR = Number(target.actor?.system?.characteristics?.str?.value ?? 0);
+    const tracker = new GrappleTracker(grappler, target, gSTR, tSTR);
+    tracker.render(true);
+    emitGrappleTrackerOpen(grappler, target, gSTR, tSTR);
+    return true;
+  }
+  return false;
+}
+
+function registerGrappleTrackerSocketHandler() {
+  if (game.heroCombat?.grappleSocketRegistered) return;
+  game.heroCombat = game.heroCombat || {};
+  game.heroCombat.grappleSocketRegistered = true;
+
+  game.socket.on(`module.${MODULE_ID}`, async (data) => {
+    if (!data || data.type !== GRAPPLE_OPEN_TRACKER_EVENT) return;
+    if (data.senderId === game.user.id) return;
+
+    const grappler = await resolveTokenFromUuidOrId(data.grapplerTokenUuid, data.grapplerTokenId);
+    const target = await resolveTokenFromUuidOrId(data.targetTokenUuid, data.targetTokenId);
+    if (!grappler || !target) return;
+    if (!canViewGrappleTracker(game.user, grappler, target)) return;
+
+    const gSTR = Number.isFinite(Number(data.gSTR))
+      ? Number(data.gSTR)
+      : Number(grappler.actor?.system?.characteristics?.str?.value ?? 0);
+    const tSTR = Number.isFinite(Number(data.tSTR))
+      ? Number(data.tSTR)
+      : Number(target.actor?.system?.characteristics?.str?.value ?? 0);
+
+    const tracker = new GrappleTracker(grappler, target, gSTR, tSTR);
+    tracker.render(true);
+  });
+}
+
+registerGrappleTrackerSocketHandler();
 
 function getGrappleState(effect) {
   return effect?.getFlag?.(MODULE_ID, GRAPPLE_FLAG) ?? null;
@@ -423,6 +536,11 @@ export async function run() {
     return;
   }
 
+  // If this token is already in an active grapple, reopen that tracker for all involved controllers.
+  if (await tryOpenExistingGrappleTracker(grappler)) {
+    return;
+  }
+
   const targets = canvas.tokens.placeables.filter(t => t.id !== grappler.id && t.actor && canModifyActor(t.actor));
   if (!targets.length) {
     ui.notifications.warn("No writable target tokens found to grab.");
@@ -475,6 +593,7 @@ export async function run() {
 
           const tracker = new GrappleTracker(grappler, target, gSTR, tSTR);
           tracker.render(true);
+          emitGrappleTrackerOpen(grappler, target, gSTR, tSTR);
         }
       },
       cancel: { label: "Cancel" }

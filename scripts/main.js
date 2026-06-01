@@ -30,6 +30,15 @@ Hooks.once("init", () => {
     default: false
   });
 
+  game.settings.register("hero-combat-engine", "entangleDebugMode", {
+    name: "Entangle Diagnostics",
+    hint: "Log Entangle effect-detection diagnostics to the browser console when Debug Mode is enabled.",
+    scope: "world",
+    config: false,
+    type: Boolean,
+    default: false
+  });
+
   // ── Ring Appearance ──────────────────────────────────────────
   game.settings.register("hero-combat-engine", "ringColorActive", {
     name: "Active Token Ring Color",

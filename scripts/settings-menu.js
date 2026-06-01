@@ -17,6 +17,7 @@ export class HeroCombatSettingsMenu extends FormApplication {
     const accessibilitySize = s("accessibilitySize") || "compact";
     return {
       debugMode:              s("debugMode"),
+      entangleDebugMode:      s("entangleDebugMode"),
       ringColorActive:        s("ringColorActive"),
       ringColorIncapacitated: s("ringColorIncapacitated"),
       ringColorBurst:         s("ringColorBurst"),

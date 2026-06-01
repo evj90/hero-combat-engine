@@ -124,8 +124,8 @@
             {{#if isDrain}}Drain{{else}}Aid{{/if}}:{{char}} {{points}}
           </span>
           {{/each}}
-          {{#if entangle}}
-          <a class="hero-status-btn hero-entangle-btn{{#if entangle.active}} active{{/if}}{{#if entangle.canManage}} has-ctx{{else}} read-only{{/if}}"
+          {{#if entangle.active}}
+          <a class="hero-status-btn hero-entangle-btn active{{#if entangle.canManage}} has-ctx{{else}} read-only{{/if}}"
              role="button" data-token-id="{{id}}" title="{{entangle.tooltip}}" aria-label="Entangle">
             <img src="{{entangle.icon}}" width="14" height="14"/>
             {{#if entangle.body}}<span class="hero-ent-badge">{{entangle.body}}</span>{{/if}}
@@ -136,8 +136,8 @@
           </a>
           <a class="hero-cover-btn{{#if coverDCV}} active{{/if}}{{#unless canToggleCover}} read-only{{else}} has-ctx{{/unless}}"
              role="button" data-token-id="{{id}}"
-            title="Cover — {{coverStageLabel}}{{#if coverDCV}} (+{{coverDCV}} DCV){{/if}}{{#if canToggleCover}} (left-click cycles None, Low, Medium, High; right-click sets directly){{else}} (Unavailable for current user){{/if}}"
-             aria-label="Cover — {{coverStageLabel}}" aria-disabled="{{#unless canToggleCover}}true{{else}}false{{/unless}}">
+            title="DCV Bonus — {{coverStageLabel}}{{#if coverDCV}} (+{{coverDCV}} DCV){{/if}}{{#if canToggleCover}} (left-click cycles None, Low, Medium, High; right-click sets directly){{else}} (Unavailable for current user){{/if}}"
+             aria-label="DCV Bonus — {{coverStageLabel}}" aria-disabled="{{#unless canToggleCover}}true{{else}}false{{/unless}}">
             <i class="fas fa-shield-alt"></i>
             {{#if coverDCV}}<span class="hero-cover-badge">+{{coverDCV}}</span>{{/if}}
           </a>
