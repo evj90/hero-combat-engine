@@ -44,7 +44,6 @@
 
 ### Macro Compendium
 - Full Health
-- Grapple (STR contest with squeeze, throw, pin, drag, break free)
 - Recover
 - Remove Status Effects
 - Rotate CW

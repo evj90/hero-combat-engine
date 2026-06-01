@@ -21,7 +21,6 @@ hero-combat-engine/
 │   ├── macro-registry.generated.js # Auto-generated macro loader
 │   └── macros/                 # Source-controlled macro scripts
 │       ├── Full Health.js
-│       ├── Grapple.js
 │       ├── recover.js
 │       ├── Remove Status Effects.js
 │       ├── Rotate CW.js
