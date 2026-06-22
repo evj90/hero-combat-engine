@@ -323,6 +323,16 @@ Hooks.once("init", () => {
     default: "end"
   });
 
+  // ── Attack Modifier Dialog ─────────────────────────────────────
+  game.settings.register("hero-combat-engine", "attackModifiers", {
+    name: "Custom Attack Modifiers",
+    hint: "JSON array of additional or replacement attack modifier entries shown in the Attack Modifier dialog. Each entry: { \"id\", \"category\", \"name\", \"ocvMod\", \"dcvMod\", \"description\" }. Invalid JSON is silently ignored.",
+    scope: "world",
+    config: false,
+    type: String,
+    default: "[]"
+  });
+
   // ── Stat Condition Thresholds & Colors ─────────────────────
   game.settings.register("hero-combat-engine", "statLessAt", {
     name: "Stat Condition: Less threshold (%)",

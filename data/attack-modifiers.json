@@ -1,0 +1,170 @@
+[
+  {
+    "id": "brace",
+    "category": "maneuver",
+    "name": "Brace",
+    "ocvMod": 2,
+    "dcvMod": -2,
+    "description": "+2 OCV with Ranged attacks; −2 DCV"
+  },
+  {
+    "id": "set",
+    "category": "maneuver",
+    "name": "Set",
+    "ocvMod": 1,
+    "dcvMod": 0,
+    "description": "+1 OCV with Ranged after spending a full Phase aiming"
+  },
+  {
+    "id": "haymaker",
+    "category": "maneuver",
+    "name": "Haymaker",
+    "ocvMod": 0,
+    "dcvMod": -5,
+    "description": "Add +4 DCs to next attack; −5 DCV until your next Phase"
+  },
+  {
+    "id": "move-by",
+    "category": "maneuver",
+    "name": "Move By",
+    "ocvMod": -2,
+    "dcvMod": -2,
+    "description": "Attack while moving past target; −2 OCV, −2 DCV"
+  },
+  {
+    "id": "move-through",
+    "category": "maneuver",
+    "name": "Move Through",
+    "ocvMod": -3,
+    "dcvMod": -3,
+    "description": "Ram target at speed; −v/5 OCV (typical −3), −3 DCV"
+  },
+  {
+    "id": "grab",
+    "category": "maneuver",
+    "name": "Grab",
+    "ocvMod": -1,
+    "dcvMod": -2,
+    "description": "Seize an opponent; −1 OCV, −2 DCV"
+  },
+  {
+    "id": "grab-by",
+    "category": "maneuver",
+    "name": "Grab By",
+    "ocvMod": -3,
+    "dcvMod": -4,
+    "description": "Grab while moving through target; −3 OCV, −4 DCV"
+  },
+  {
+    "id": "sweep",
+    "category": "maneuver",
+    "name": "Sweep",
+    "ocvMod": -2,
+    "dcvMod": 0,
+    "description": "Attack multiple targets; −2 OCV per additional target"
+  },
+  {
+    "id": "multiple-attack",
+    "category": "maneuver",
+    "name": "Multiple Attack",
+    "ocvMod": -2,
+    "dcvMod": 0,
+    "description": "Multiple attacks in one Phase; −2 OCV cumulative per attack after the first"
+  },
+  {
+    "id": "disarm",
+    "category": "maneuver",
+    "name": "Disarm",
+    "ocvMod": -2,
+    "dcvMod": 0,
+    "description": "Knock a weapon from opponent's hand; −2 OCV, no damage"
+  },
+  {
+    "id": "shove",
+    "category": "maneuver",
+    "name": "Shove",
+    "ocvMod": -1,
+    "dcvMod": -1,
+    "description": "Push opponent without full damage; −1 OCV, −1 DCV"
+  },
+  {
+    "id": "range-short",
+    "category": "situational",
+    "name": "Range: Short (−2)",
+    "ocvMod": -2,
+    "dcvMod": 0,
+    "description": "Target is at short range (≈8–16m); −2 OCV"
+  },
+  {
+    "id": "range-medium",
+    "category": "situational",
+    "name": "Range: Medium (−4)",
+    "ocvMod": -4,
+    "dcvMod": 0,
+    "description": "Target is at medium range (≈17–32m); −4 OCV"
+  },
+  {
+    "id": "range-long",
+    "category": "situational",
+    "name": "Range: Long (−6)",
+    "ocvMod": -6,
+    "dcvMod": 0,
+    "description": "Target is at long range (≈33–64m); −6 OCV"
+  },
+  {
+    "id": "range-extreme",
+    "category": "situational",
+    "name": "Range: Extreme (−8)",
+    "ocvMod": -8,
+    "dcvMod": 0,
+    "description": "Target is at extreme range (≈65–125m); −8 OCV"
+  },
+  {
+    "id": "called-shot",
+    "category": "situational",
+    "name": "Called Shot",
+    "ocvMod": -4,
+    "dcvMod": 0,
+    "description": "Aim for a specific Hit Location; −4 OCV"
+  },
+  {
+    "id": "limited-visibility",
+    "category": "situational",
+    "name": "Limited Visibility",
+    "ocvMod": -2,
+    "dcvMod": 0,
+    "description": "Partial obscurement (smoke, dim light, rain); −2 OCV"
+  },
+  {
+    "id": "no-visibility",
+    "category": "situational",
+    "name": "No Visibility",
+    "ocvMod": -4,
+    "dcvMod": 0,
+    "description": "Attacking blind or in total darkness; −4 OCV (or per GM ruling)"
+  },
+  {
+    "id": "target-prone",
+    "category": "situational",
+    "name": "Target Is Prone (Melee)",
+    "ocvMod": 2,
+    "dcvMod": 0,
+    "description": "Melee attack against a prone opponent; +2 OCV"
+  },
+  {
+    "id": "target-prone-ranged",
+    "category": "situational",
+    "name": "Target Is Prone (Ranged)",
+    "ocvMod": -2,
+    "dcvMod": 0,
+    "description": "Ranged attack against a prone opponent; −2 OCV (smaller target)"
+  },
+  {
+    "id": "flanking",
+    "category": "situational",
+    "name": "Flanking / Rear Attack",
+    "ocvMod": 2,
+    "dcvMod": 0,
+    "description": "Attacking from behind or flanking; +2 OCV"
+  }
+]

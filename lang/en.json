@@ -1,3 +1,12 @@
 {
-  "HEROCombat.PanelTitle": "HERO Combat Panel"
+  "HEROCombat.PanelTitle": "HERO Combat Panel",
+  "HEROCombat.AtkModBtn": "Attack Modifiers",
+  "HEROCombat.AtkModTitle": "Attack Modifiers",
+  "HEROCombat.AtkModHint": "Select modifiers for the next attack. Apply adds a temporary CV modifier to this token for the chosen number of segments.",
+  "HEROCombat.AtkModSectionManeuver": "Combat Maneuver",
+  "HEROCombat.AtkModSectionSituational": "Situational Modifiers",
+  "HEROCombat.AtkModSectionCustom": "Custom",
+  "HEROCombat.AtkModSectionStatus": "Active Status Effects",
+  "HEROCombat.AtkModNone": "None (standard attack)",
+  "HEROCombat.AtkModDuration": "Duration (segments)"
 }

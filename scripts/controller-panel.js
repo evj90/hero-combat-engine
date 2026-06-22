@@ -1,5 +1,6 @@
 import { getActingTokens } from "./segment-engine.js";
 import { combatEngineSpeaker, heroLog } from "./utils.js";
+import { openAttackModifierDialog } from "./attack-modifier-dialog.js";
 
 // ── Quick-toggle status conditions shown in the tracker ─────────
 // IDs match Foundry v11 core CONFIG.statusEffects keys.
@@ -1478,6 +1479,13 @@ export class HeroControllerPanel extends Application {
       if (!canUserControlToken(token)) return;
       e.preventDefault();
       await this._openMcvBonusDialog(tokenId);
+    });
+
+    html.find(".hero-atk-modifier-btn").click(async (e) => {
+      if (isDisabledControl(e.currentTarget)) return;
+      e.preventDefault();
+      const tokenId = e.currentTarget.dataset.tokenId;
+      await openAttackModifierDialog(tokenId);
     });
 
     html.find(".hero-status-btn:not(.hero-entangle-btn)").click(async (e) => {
