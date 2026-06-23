@@ -166,5 +166,77 @@
     "ocvMod": 2,
     "dcvMod": 0,
     "description": "Attacking from behind or flanking; +2 OCV"
+  },
+  {
+    "id": "autofire-single-target",
+    "category": "situational",
+    "name": "Autofire (1 target)",
+    "ocvMod": 4,
+    "dcvMod": 0,
+    "description": "Autofire against one target; +4 OCV."
+  },
+  {
+    "id": "bouncing-attack-1",
+    "category": "situational",
+    "name": "Bouncing Attack (+1)",
+    "ocvMod": 1,
+    "dcvMod": 0,
+    "description": "Bouncing attack bonus at low surprise level; GM may allow +1 to +3 OCV."
+  },
+  {
+    "id": "bouncing-attack-2",
+    "category": "situational",
+    "name": "Bouncing Attack (+2)",
+    "ocvMod": 2,
+    "dcvMod": 0,
+    "description": "Bouncing attack bonus at medium surprise level; GM may allow +1 to +3 OCV."
+  },
+  {
+    "id": "bouncing-attack-3",
+    "category": "situational",
+    "name": "Bouncing Attack (+3)",
+    "ocvMod": 3,
+    "dcvMod": 0,
+    "description": "Bouncing attack bonus at high surprise level; GM may allow +1 to +3 OCV."
+  },
+  {
+    "id": "braced-combat-mod",
+    "category": "maneuver",
+    "name": "Braced (+1 OCV)",
+    "ocvMod": 1,
+    "dcvMod": 0,
+    "description": "Braced ranged attack grants +1 OCV. If using strict rule 'DCV drops to 0', apply that manually."
+  },
+  {
+    "id": "move-and-attack",
+    "category": "maneuver",
+    "name": "Move and Attack",
+    "ocvMod": -1,
+    "dcvMod": 0,
+    "description": "If the attacker moved and attacks (except Move Through/Move By), apply -1 OCV."
+  },
+  {
+    "id": "surprise-maneuver-1",
+    "category": "situational",
+    "name": "Surprise Maneuver (+1)",
+    "ocvMod": 1,
+    "dcvMod": 0,
+    "description": "Surprise maneuver bonus; GM sets level from +0 to +3 OCV."
+  },
+  {
+    "id": "surprise-maneuver-2",
+    "category": "situational",
+    "name": "Surprise Maneuver (+2)",
+    "ocvMod": 2,
+    "dcvMod": 0,
+    "description": "Surprise maneuver bonus; GM sets level from +0 to +3 OCV."
+  },
+  {
+    "id": "surprise-maneuver-3",
+    "category": "situational",
+    "name": "Surprise Maneuver (+3)",
+    "ocvMod": 3,
+    "dcvMod": 0,
+    "description": "Surprise maneuver bonus; GM sets level from +0 to +3 OCV."
   }
 ]
