@@ -333,6 +333,15 @@ Hooks.once("init", () => {
     default: "[]"
   });
 
+  game.settings.register("hero-combat-engine", "attackSituationalEnabledIds", {
+    name: "Enabled Situational Attack Modifier IDs",
+    hint: "Internal JSON list of situational attack modifier ids enabled in the Attack Modifier dialog.",
+    scope: "world",
+    config: false,
+    type: String,
+    default: "__ALL__"
+  });
+
   // ── Stat Condition Thresholds & Colors ─────────────────────
   game.settings.register("hero-combat-engine", "statLessAt", {
     name: "Stat Condition: Less threshold (%)",

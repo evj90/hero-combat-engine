@@ -320,6 +320,37 @@
       </div>
     </fieldset>
 
+    <fieldset class="hero-settings-group">
+      <legend><i class="fas fa-crosshairs"></i> Attack Modifiers</legend>
+      <div class="form-group">
+        <label>Enabled Situational Modifiers</label>
+        <div class="form-fields" style="display:block; max-height:220px; overflow:auto; border:1px solid #6663; border-radius:6px; padding:8px;">
+          {{#if situationalModifiers.length}}
+            {{#each situationalModifiers}}
+              <label style="display:block; margin:2px 0;">
+                <input type="checkbox" name="situationalEnabledIds" value="{{id}}" {{#if isEnabled}}checked{{/if}}/>
+                <strong>{{name}}</strong>
+                <span class="hint" style="margin-left:6px;">({{deltaLabel}})</span>
+                {{#if description}}
+                  <div class="hint" style="margin-left:18px;">{{description}}</div>
+                {{/if}}
+              </label>
+            {{/each}}
+          {{else}}
+            <p class="hint" style="margin:0;">No situational modifiers are currently available.</p>
+          {{/if}}
+        </div>
+        <p class="hint">Uncheck entries to hide them from the Attack Modifiers popup. Checked entries remain available.</p>
+      </div>
+      <div class="form-group">
+        <label>Attack Modifier Overrides (JSON)</label>
+        <div class="form-fields" style="display:block;">
+          <textarea name="attackModifiersJson" rows="8" style="width:100%; font-family:monospace;">{{attackModifiersJson}}</textarea>
+        </div>
+        <p class="hint">JSON array of modifier objects. Fields: id, category, name, ocvMod, dcvMod, description. Entries with matching ids override built-ins.</p>
+      </div>
+    </fieldset>
+
   </div>
   <footer class="sheet-footer flexrow">
     <button type="submit"><i class="fas fa-save"></i> Save Changes</button>

@@ -1,8 +1,8 @@
 /**
  * Attack Modifier Dialog
  *
- * Opens a popup that lets the user select combat maneuvers, situational
- * modifiers, and a custom OCV/DCV delta, then applies the net result as a
+ * Opens a popup that lets the user select situational modifiers and a
+ * custom OCV/DCV delta, then applies the net result as a
  * temporary cvSegmentMod on the token — the same schema used by the existing
  * CV modifier system, so expiration is handled for free.
  */
@@ -58,6 +58,18 @@ function _signStr(n) {
   return `${n >= 0 ? "+" : ""}${n}`;
 }
 
+function _getEnabledSituationalIdSet() {
+  const raw = game.settings.get("hero-combat-engine", "attackSituationalEnabledIds") ?? "__ALL__";
+  if (raw === "__ALL__") return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    return new Set(parsed.filter(id => typeof id === "string" && id.length));
+  } catch {
+    return null;
+  }
+}
+
 // ── Load attack modifiers (default + GM custom) ──────────────────────────────
 
 async function _loadModifiers() {
@@ -90,30 +102,11 @@ async function _loadModifiers() {
 // ── Build dialog HTML ────────────────────────────────────────────────────────
 
 function _buildDialogContent(token, modifiers, activeStatuses) {
-  const maneuvers    = modifiers.filter(m => m.category === "maneuver");
-  const situational  = modifiers.filter(m => m.category === "situational");
+  const enabledSituationalIds = _getEnabledSituationalIdSet();
+  const situational  = modifiers
+    .filter(m => m.category === "situational")
+    .filter(m => enabledSituationalIds === null || enabledSituationalIds.has(m.id));
   const customCats   = [...new Set(modifiers.filter(m => m.category !== "maneuver" && m.category !== "situational").map(m => m.category))];
-
-  // ── Maneuvers (radio, one per attack) ──
-  const maneuverRows = [
-    `<label class="atk-mod-row">
-      <input type="radio" name="atk-maneuver" value="" data-ocv="0" data-dcv="0" checked/>
-      <span class="atk-mod-name">None (standard attack)</span>
-    </label>`
-  ].concat(maneuvers.map(m => {
-    const ocvStr = m.ocvMod !== 0 ? `OCV ${_signStr(m.ocvMod)}` : "";
-    const dcvStr = m.dcvMod !== 0 ? `DCV ${_signStr(m.dcvMod)}` : "";
-    const deltaText = [ocvStr, dcvStr].filter(Boolean).join(", ");
-    const deltaHtml = deltaText
-      ? `<span class="atk-mod-delta ${m.ocvMod < 0 || m.dcvMod < 0 ? "atk-mod-neg" : "atk-mod-pos"}">${deltaText}</span>`
-      : "";
-    return `<label class="atk-mod-row" title="${m.description ?? ""}">
-      <input type="radio" name="atk-maneuver" value="${m.id}" data-ocv="${m.ocvMod ?? 0}" data-dcv="${m.dcvMod ?? 0}"/>
-      <span class="atk-mod-name">${m.name}</span>
-      ${deltaHtml}
-      <span class="atk-mod-desc">${m.description ?? ""}</span>
-    </label>`;
-  })).join("");
 
   // ── Situational (checkboxes, multi-select) ──
   const situationalRows = situational.map(m => {
@@ -175,11 +168,6 @@ function _buildDialogContent(token, modifiers, activeStatuses) {
     <p class="atk-mod-hint">Select modifiers for the next attack. Apply adds a temporary CV modifier to this token for the chosen number of segments.</p>
 
     <fieldset class="atk-mod-section">
-      <legend>Combat Maneuver <span class="atk-mod-legend-note">(select one)</span></legend>
-      <div class="atk-mod-scroll">${maneuverRows}</div>
-    </fieldset>
-
-    <fieldset class="atk-mod-section">
       <legend>Situational Modifiers <span class="atk-mod-legend-note">(select all that apply)</span></legend>
       <div class="atk-mod-scroll">${situationalRows}</div>
     </fieldset>
@@ -211,10 +199,6 @@ function _buildDialogContent(token, modifiers, activeStatuses) {
 function _calcNet(html) {
   let ocv = 0;
   let dcv = 0;
-
-  const maneuver = html.find("input[name='atk-maneuver']:checked");
-  ocv += parseInt(maneuver.data("ocv") ?? 0) || 0;
-  dcv += parseInt(maneuver.data("dcv") ?? 0) || 0;
 
   html.find(".atk-situational-cb:checked").each((_, el) => {
     ocv += parseInt(el.dataset.ocv ?? 0) || 0;
@@ -287,7 +271,7 @@ export async function openAttackModifierDialog(tokenId) {
       },
       default: "apply",
       render: html => {
-        html.find("input[name='atk-maneuver'], .atk-situational-cb, #atk-custom-ocv, #atk-custom-dcv")
+        html.find(".atk-situational-cb, #atk-custom-ocv, #atk-custom-dcv")
           .on("change input", () => _updateNetDisplay(html));
         _updateNetDisplay(html);
       }
