@@ -1,6 +1,5 @@
 import { getActingTokens } from "./segment-engine.js";
 import { combatEngineSpeaker, heroLog } from "./utils.js";
-import { openAttackModifierDialog } from "./attack-modifier-dialog.js";
 
 // ── Quick-toggle status conditions shown in the tracker ─────────
 // IDs match Foundry v11 core CONFIG.statusEffects keys.
@@ -528,13 +527,21 @@ function getCvModifierRemainingSegments(mod, currentPhase, currentSegment) {
   return Math.max(0, Number(mod?.remainingSegments ?? 0));
 }
 
-function createCvModifierEntry(statMods, segments, phase, segment) {
+function createCvModifierEntry(statMods, segments, phase, segment, metadata = {}) {
   const duration = Math.max(1, Number(segments ?? 1));
   const applyIndex = getAbsoluteSegmentIndex(phase, segment);
   const expireIndex = applyIndex + duration;
+  const selectedAttackModifiers = Array.isArray(metadata?.selectedAttackModifiers)
+    ? metadata.selectedAttackModifiers
+      .map(item => ({ id: String(item?.id ?? ""), name: String(item?.name ?? "") }))
+      .filter(item => item.id && item.name)
+    : [];
+
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     statMods,
+    source: typeof metadata?.source === "string" ? metadata.source : "manual",
+    selectedAttackModifiers,
     remainingSegments: duration,
     appliedPhase: Number(phase ?? 1),
     appliedSegment: Number(segment ?? 1),
@@ -608,6 +615,91 @@ function formatCombatValueModParts(statMods, preferredOrder = []) {
     const delta = Number(statMods[statKey] ?? 0);
     return `${getCharacteristicLabel(statKey)} ${delta > 0 ? "+" : ""}${delta}`;
   });
+}
+
+function getCvModifierNameParts(entry) {
+  return (entry?.selectedAttackModifiers ?? [])
+    .map(item => String(item?.name ?? "").trim())
+    .filter(Boolean);
+}
+
+function buildCvModifierSummary(entry, preferredOrder = []) {
+  const valueParts = formatCombatValueModParts(getCombatValueModsFromEntry(entry), preferredOrder);
+  const nameParts = getCvModifierNameParts(entry);
+
+  if (!nameParts.length) return valueParts.join(", ");
+  return `${nameParts.join(" + ")} (${valueParts.join(", ")})`;
+}
+
+function signValue(n) {
+  return `${n >= 0 ? "+" : ""}${n}`;
+}
+
+function escapeHtmlAttr(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function getEnabledSituationalIdSet() {
+  const raw = game.settings.get("hero-combat-engine", "attackSituationalEnabledIds") ?? "__ALL__";
+  if (raw === "__ALL__") return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    return new Set(parsed.filter(id => typeof id === "string" && id.length));
+  } catch {
+    return null;
+  }
+}
+
+async function loadAttackModifiers() {
+  let defaults = [];
+  try {
+    const modPath = game.modules.get("hero-combat-engine")?.path ?? "modules/hero-combat-engine";
+    const resp = await fetch(`${modPath}/data/attack-modifiers.json`);
+    if (resp.ok) defaults = await resp.json();
+  } catch (err) {
+    console.warn("HERO Combat Engine | failed to load attack-modifiers.json", err);
+  }
+
+  let custom = [];
+  try {
+    const raw = game.settings.get("hero-combat-engine", "attackModifiers") ?? "[]";
+    custom = JSON.parse(raw);
+    if (!Array.isArray(custom)) custom = [];
+  } catch {
+    custom = [];
+  }
+
+  const map = new Map(defaults.map(m => [m.id, m]));
+  for (const c of custom) {
+    if (c?.id) map.set(c.id, { ...map.get(c.id), ...c });
+  }
+  return [...map.values()];
+}
+
+function buildAttackModifierRows(modifiers = [], selectedIds = new Set()) {
+  return modifiers.map(mod => {
+    const ocv = Number(mod?.ocvMod ?? 0);
+    const dcv = Number(mod?.dcvMod ?? 0);
+    const deltaParts = [];
+    if (ocv) deltaParts.push(`OCV ${signValue(ocv)}`);
+    if (dcv) deltaParts.push(`DCV ${signValue(dcv)}`);
+    const deltaText = deltaParts.join(", ");
+    const deltaClass = ocv < 0 || dcv < 0 ? "atk-mod-neg" : "atk-mod-pos";
+    const title = escapeHtmlAttr(mod?.description ?? "");
+    const modId = escapeHtmlAttr(mod?.id ?? "");
+    const modName = escapeHtmlAttr(mod?.name ?? "");
+    const checked = selectedIds.has(String(mod?.id ?? "")) ? " checked" : "";
+    return `<label class="atk-mod-row" title="${title}">
+      <input type="checkbox" class="atk-situational-cb" data-mod-id="${modId}" data-mod-name="${modName}" data-ocv="${ocv}" data-dcv="${dcv}"${checked}/>
+      <span class="atk-mod-name">${modName}</span>
+      ${deltaText ? `<span class="atk-mod-delta ${deltaClass}">${deltaText}</span>` : ""}
+    </label>`;
+  }).join("");
 }
 
 function buildAdjustmentTooltip(adj) {
@@ -1485,7 +1577,7 @@ export class HeroControllerPanel extends Application {
       if (isDisabledControl(e.currentTarget)) return;
       e.preventDefault();
       const tokenId = e.currentTarget.dataset.tokenId;
-      await openAttackModifierDialog(tokenId);
+      await this._openCvAdjustmentDialog(tokenId);
     });
 
     html.find(".hero-status-btn:not(.hero-entangle-btn)").click(async (e) => {
@@ -2480,10 +2572,20 @@ export class HeroControllerPanel extends Application {
     const activeMods = token.document.getFlag("hero-combat-engine", "cvSegmentMods") ?? [];
     const currentPhase = canvas.scene.getFlag("hero-combat-engine", "heroPhase") ?? 1;
     const currentSegment = canvas.scene.getFlag("hero-combat-engine", "heroSegment") ?? 1;
+    const allAttackModifiers = await loadAttackModifiers();
+    const enabledSituationalIds = getEnabledSituationalIdSet();
+    const situationalAttackModifiers = allAttackModifiers
+      .filter(mod => mod.category === "situational")
+      .filter(mod => enabledSituationalIds === null || enabledSituationalIds.has(mod.id));
+    const customAttackCategories = [...new Set(
+      allAttackModifiers
+        .filter(mod => mod.category !== "maneuver" && mod.category !== "situational")
+        .map(mod => mod.category)
+    )];
 
     // Build per-modifier rows with explicit duration and cancel controls.
     const activeModRows = activeMods.map((m, idx) => {
-      const parts = formatCombatValueModParts(getCombatValueModsFromEntry(m), configuredStats);
+      const summary = buildCvModifierSummary(m, configuredStats);
       const remainingSegments = getCvModifierRemainingSegments(m, currentPhase, currentSegment);
       const appliedPhase = Number(m.appliedPhase);
       const appliedSegment = Number(m.appliedSegment);
@@ -2491,7 +2593,7 @@ export class HeroControllerPanel extends Application {
         ? `${appliedPhase}.${appliedSegment}`
         : "-";
       return `<div style="display:grid;grid-template-columns:minmax(0,1fr) 110px 88px 64px;gap:8px;align-items:center;padding:4px 0;border-top:1px solid var(--color-border-light-tertiary);">
-        <span style="min-width:0;overflow-wrap:anywhere;">${parts.join(", ")}</span>
+        <span style="min-width:0;overflow-wrap:anywhere;">${summary}</span>
         <span>${remainingSegments} seg${remainingSegments === 1 ? "" : "s"} left</span>
         <span style="color:var(--color-text-dark-secondary);font-size:0.85em;">Applied ${appliedLabel}</span>
         <span style="display:flex;justify-content:flex-end;gap:4px;">
@@ -2525,15 +2627,32 @@ export class HeroControllerPanel extends Application {
       <span id="cv-mod-${index}-val">0</span>
     `).join("");
 
+    const situationalAttackRows = buildAttackModifierRows(situationalAttackModifiers);
+    const customAttackSections = customAttackCategories.map(cat => {
+      const rows = buildAttackModifierRows(allAttackModifiers.filter(mod => mod.category === cat));
+      const heading = String(cat).charAt(0).toUpperCase() + String(cat).slice(1);
+      return `<fieldset class="atk-mod-section">
+        <legend>${heading}</legend>
+        <div class="atk-mod-scroll">${rows}</div>
+      </fieldset>`;
+    }).join("");
+
     const result = await new Promise(resolve => {
       const dlg = new Dialog({
         title: `Temporary Combat Value Modifiers — ${token.name}`,
         content: `
           <div style="display:grid;gap:8px;margin-top:4px;">
             <p style="margin:0;font-size:0.85em;color:var(--color-text-dark-secondary);">
-              Right-click combat values. Apply temporary characteristic changes for a fixed number of segments.
+              Apply attack modifiers and manual characteristic changes for a fixed number of segments.
             </p>
             ${activeSection}
+
+            <fieldset class="atk-mod-section">
+              <legend>Attack Modifiers <span class="atk-mod-legend-note">(hover rows for descriptions)</span></legend>
+              <div class="atk-mod-scroll">${situationalAttackRows}</div>
+            </fieldset>
+
+            ${customAttackSections}
 
             <div style="display:grid;grid-template-columns:130px 1fr 42px;gap:6px 8px;align-items:center;">
               ${statSlidersMarkup}
@@ -2551,15 +2670,29 @@ export class HeroControllerPanel extends Application {
             label: "Apply New",
             callback: html => {
               const statMods = {};
+              const selectedAttackModifiers = [];
+
+              html.find(".atk-situational-cb:checked").each((_, el) => {
+                const ocv = parseInt(el.dataset.ocv ?? 0) || 0;
+                const dcv = parseInt(el.dataset.dcv ?? 0) || 0;
+                if (ocv) statMods.ocv = (statMods.ocv ?? 0) + ocv;
+                if (dcv) statMods.dcv = (statMods.dcv ?? 0) + dcv;
+
+                const id = String(el.dataset.modId ?? "");
+                const name = String(el.dataset.modName ?? "");
+                if (id && name) selectedAttackModifiers.push({ id, name });
+              });
+
               configuredStats.forEach((statKey, index) => {
                 const delta = parseInt(html.find(`#cv-mod-${index}`).val()) || 0;
                 if (!delta) return;
-                statMods[statKey] = delta;
+                statMods[statKey] = (statMods[statKey] ?? 0) + delta;
               });
 
               resolve({
                 action: "apply",
                 statMods,
+                selectedAttackModifiers,
                 segments: parseInt(html.find("#cv-segments").val()) || 1
               });
             }
@@ -2632,8 +2765,8 @@ export class HeroControllerPanel extends Application {
         await token.document.unsetFlag("hero-combat-engine", "cvSegmentMods");
       }
 
-      const parts = formatCombatValueModParts(modDeltas, configuredStats);
-      createGmOnlyCombatChatMessage(`<strong>${token.name}</strong> modifier removed: ${parts.join(", ")}.`, phase, segment);
+      const removedSummary = buildCvModifierSummary(mod, configuredStats);
+      createGmOnlyCombatChatMessage(`<strong>${token.name}</strong> modifier removed: ${removedSummary}.`, phase, segment);
 
       await this.render(true);
       return;
@@ -2647,6 +2780,18 @@ export class HeroControllerPanel extends Application {
 
       const existingMods = getCombatValueModsFromEntry(mod);
       const existingRemaining = getCvModifierRemainingSegments(mod, currentPhase, currentSegment);
+      const existingSelectedIds = new Set((mod?.selectedAttackModifiers ?? [])
+        .map(item => String(item?.id ?? ""))
+        .filter(Boolean));
+      const editSituationalRows = buildAttackModifierRows(situationalAttackModifiers, existingSelectedIds);
+      const editCustomSections = customAttackCategories.map(cat => {
+        const rows = buildAttackModifierRows(allAttackModifiers.filter(item => item.category === cat), existingSelectedIds);
+        const heading = String(cat).charAt(0).toUpperCase() + String(cat).slice(1);
+        return `<fieldset class="atk-mod-section">
+          <legend>${heading}</legend>
+          <div class="atk-mod-scroll">${rows}</div>
+        </fieldset>`;
+      }).join("");
 
       const editSlidersMarkup = configuredStats.map((statKey, si) => {
         const val = Number(existingMods[statKey] ?? 0);
@@ -2662,6 +2807,13 @@ export class HeroControllerPanel extends Application {
           title: `Edit Modifier — ${token.name}`,
           content: `
             <div style="display:grid;gap:8px;margin-top:4px;">
+              <fieldset class="atk-mod-section">
+                <legend>Attack Modifiers <span class="atk-mod-legend-note">(hover rows for descriptions)</span></legend>
+                <div class="atk-mod-scroll">${editSituationalRows}</div>
+              </fieldset>
+
+              ${editCustomSections}
+
               <div style="display:grid;grid-template-columns:130px 1fr 42px;gap:6px 8px;align-items:center;">
                 ${editSlidersMarkup}
               </div>
@@ -2677,13 +2829,27 @@ export class HeroControllerPanel extends Application {
               label: "Save",
               callback: html => {
                 const statMods = {};
+                const selectedAttackModifiers = [];
+
+                html.find(".atk-situational-cb:checked").each((_, el) => {
+                  const ocv = parseInt(el.dataset.ocv ?? 0) || 0;
+                  const dcv = parseInt(el.dataset.dcv ?? 0) || 0;
+                  if (ocv) statMods.ocv = (statMods.ocv ?? 0) + ocv;
+                  if (dcv) statMods.dcv = (statMods.dcv ?? 0) + dcv;
+
+                  const id = String(el.dataset.modId ?? "");
+                  const name = String(el.dataset.modName ?? "");
+                  if (id && name) selectedAttackModifiers.push({ id, name });
+                });
+
                 configuredStats.forEach((statKey, si) => {
                   const delta = parseInt(html.find(`#cv-edit-${si}`).val()) || 0;
                   if (!delta) return;
-                  statMods[statKey] = delta;
+                  statMods[statKey] = (statMods[statKey] ?? 0) + delta;
                 });
                 resolve({
                   statMods,
+                  selectedAttackModifiers,
                   segments: parseInt(html.find("#cv-edit-segments").val()) || 1
                 });
               }
@@ -2716,13 +2882,17 @@ export class HeroControllerPanel extends Application {
       if (Object.keys(revertUpdates).length) await actor.update(revertUpdates);
       if (Object.keys(applyUpdates).length) await actor.update(applyUpdates);
 
-      const newEntry = createCvModifierEntry(editResult.statMods, editResult.segments, phase, segment);
+      const editSource = editResult.selectedAttackModifiers?.length ? "attack+manual" : "manual";
+      const newEntry = createCvModifierEntry(editResult.statMods, editResult.segments, phase, segment, {
+        source: editSource,
+        selectedAttackModifiers: editResult.selectedAttackModifiers ?? []
+      });
       const updated = [...activeMods];
       updated[idx] = newEntry;
       await token.document.setFlag("hero-combat-engine", "cvSegmentMods", updated);
 
-      const parts = formatCombatValueModParts(editResult.statMods, configuredStats);
-      createGmOnlyCombatChatMessage(`<strong>${token.name}</strong> modifier updated: ${parts.join(", ")} for ${editResult.segments} segment${editResult.segments === 1 ? "" : "s"}.`, phase, segment);
+      const updatedSummary = buildCvModifierSummary(newEntry, configuredStats);
+      createGmOnlyCombatChatMessage(`<strong>${token.name}</strong> modifier updated: ${updatedSummary} for ${editResult.segments} segment${editResult.segments === 1 ? "" : "s"}.`, phase, segment);
 
       await this.render(true);
       return;
@@ -2741,13 +2911,16 @@ export class HeroControllerPanel extends Application {
     }
     await actor.update(updates);
 
-    const newEntry = createCvModifierEntry(result.statMods, segments, phase, segment);
+    const source = result.selectedAttackModifiers?.length ? "attack+manual" : "manual";
+    const newEntry = createCvModifierEntry(result.statMods, segments, phase, segment, {
+      source,
+      selectedAttackModifiers: result.selectedAttackModifiers ?? []
+    });
 
     await token.document.setFlag("hero-combat-engine", "cvSegmentMods", [...activeMods, newEntry]);
 
-    const parts = formatCombatValueModParts(result.statMods, configuredStats);
-
-    createGmOnlyCombatChatMessage(`<strong>${token.name}</strong> temporary combat value mod applied: ${parts.join(", ")} for ${segments} segment${segments === 1 ? "" : "s"}.`, phase, segment);
+    const appliedSummary = buildCvModifierSummary(newEntry, configuredStats);
+    createGmOnlyCombatChatMessage(`<strong>${token.name}</strong> temporary combat value mod applied: ${appliedSummary} for ${segments} segment${segments === 1 ? "" : "s"}.`, phase, segment);
 
     await this.render(true);
   }

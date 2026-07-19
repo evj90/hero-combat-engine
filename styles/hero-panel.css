@@ -1112,13 +1112,13 @@
 .atk-mod-row {
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr) auto;
-  gap: 4px;
+  gap: 2px;
   align-items: baseline;
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 1px 3px;
   border-radius: 3px;
-  font-size: 0.82em;
-  line-height: 1.4;
+  font-size: 0.8em;
+  line-height: 1.2;
 }
 
 .atk-mod-row:hover {
@@ -1156,11 +1156,7 @@
 }
 
 .atk-mod-desc {
-  grid-column: 2 / -1;
-  font-size: 0.78em;
-  color: var(--color-text-dark-secondary, #888);
-  font-style: italic;
-  margin-top: -2px;
+  display: none;
 }
 
 /* Custom OCV/DCV row ─────────────────────────────────────────────── */
